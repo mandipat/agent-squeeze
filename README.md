@@ -1,0 +1,94 @@
+# agent_squeeze
+
+Context compression built for **Claude Code agent fleets** — multiple agents
+running simultaneously and autonomously, whose transcripts must fit back into
+one LLM call.
+
+## Quick start (60 seconds)
+
+```bash
+pip install agent-squeeze            # or: git clone this repo && pip install -e .
+export OPENROUTER_API_KEY=sk-or-v1-...   # Jev via OpenRouter decisions endpoint
+
+# 1. start the service
+agent-squeeze-serve --port 8765 &
+
+# 2. point your agents at it
+export AGENT_SQUEEZE_URL=http://localhost:8765
+```
+
+That's it — any agent that can POST JSON now gets automatic compression:
+
+```bash
+curl -s -X POST "$AGENT_SQUEEZE_URL/v1/squeeze-fleet" \
+  -H "Content-Type: application/json" \
+  -d '{"transcripts": {"frontend": [...], "backend": [...]}}'
+# -> {"transcripts": {...squeezed...}, "report": {...}}
+```
+
+**Claude Code plugin** (ships in `claude-plugin/`): copy it into your plugin
+directory and agents get a `/squeeze` skill that calls the service for them.
+
+```bash
+cp -r claude-plugin ~/.claude/plugins/agent-squeeze
+```
+
+Optional auth: set `AGENT_SQUEEZE_TOKEN` on the server; clients then send
+`Authorization: Bearer <token>`. Endpoints: `GET /health`,
+`POST /v1/squeeze`, `POST /v1/squeeze-fleet`. Stdlib only — no dependencies.
+
+## Why not just Headroom?
+
+Benchmarked side-by-side on identical inputs (`/tmp/compress_bench/`):
+
+- **Accuracy under duplication:** on adversarial transcripts with near-duplicate
+  tool outputs, Headroom's first-occurrence-wins dedup *destroyed the answer*
+  (0/2 evidence recall — unrecoverable). agent_squeeze kept 6/6 needles.
+- **Fleet-level dedup:** agents running at the same time re-read the same files
+  and re-run the same commands. Per-agent compressors squeeze each transcript
+  in isolation; agent_squeeze dedups identical tool outputs *across agents*
+  first — a win no single-transcript compressor can get.
+- **Calibrated keep/drop:** TypeSafe Jev's probabilities are usable as absolute
+  cutoffs (p ≥ 0.5). No rank-tuning, no threshold-hunting per workload.
+
+Deliberately **exact-match only** for cross-agent dedup: near-duplicate
+collapsing is what made Headroom lossy. We never take that trade autonomously.
+
+## Install
+
+```bash
+pip install -e .   # or just run from this directory; stdlib only
+export OPENROUTER_API_KEY=sk-or-v1-...   # Jev via OpenRouter decisions endpoint
+```
+
+## Use
+
+```bash
+# one agent transcript (Claude Code JSONL or OpenAI-format JSON)
+python -m agent_squeeze.cli squeeze ~/.claude/projects/myproj/transcript.jsonl \
+  --task "migrate auth to JWT" -o squeezed.json --needles needles.txt
+
+# a fleet of agents running simultaneously
+python -m agent_squeeze.cli fleet fe.jsonl be.jsonl infra.jsonl \
+  --names frontend,backend,infra -o fleet.json --needles needles.txt
+```
+
+`--task` defaults to the transcript's first user message (the agent's
+objective). Only override it to describe the objective — never write a
+compression-flavored task ("compress this transcript"): the task text defines
+what "needed" means to the judge, and a vague task drops answer-critical
+chunks. `--needles` is a file with one must-survive string per line; the CLI
+exits non-zero if any is lost — wire it into CI.
+
+## Demo
+
+```bash
+cd demo && python3 make_demo.py   # 3 simulated simultaneous agents, ~needles
+python3 run_demo.py               # fleet squeeze + needle check (+ Headroom comparison if installed)
+```
+
+## Cost / speed
+
+~$0.001 and ~1s per 30k-token transcript (Jev, OpenRouter). Local CPU models
+were evaluated and rejected: 200x slower and they dropped answer-critical
+content.

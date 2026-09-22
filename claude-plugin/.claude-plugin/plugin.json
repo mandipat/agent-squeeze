@@ -1,0 +1,1 @@
+{"author":"agent-squeeze contributors","description":"Compress agent transcripts through the agent-squeeze service before they consume context window. Calibrated keep/drop that preserves answers verbatim.","license":"MIT","name":"agent-squeeze","version":"0.1.0"}

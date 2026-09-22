@@ -1,0 +1,4 @@
+version = '3.7.2'
+port = 9443
+POST /api/v2/checkout
+DEPLOY_KEY_PROD_7

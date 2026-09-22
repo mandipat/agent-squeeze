@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-squeeze"
+version = "0.1.0"
+description = "Token compression for Claude Code agent fleets — calibrated keep/drop that won't eat your answers"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+authors = [{ name = "agent-squeeze contributors" }]
+keywords = ["llm", "agents", "context", "compression", "claude-code", "tokens"]
+
+[project.scripts]
+agent-squeeze = "agent_squeeze.cli:main"
+agent-squeeze-serve = "agent_squeeze.server:main"
+
+[project.urls]
+Repository = "https://github.com/your-org/agent-squeeze"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["agent_squeeze*"]

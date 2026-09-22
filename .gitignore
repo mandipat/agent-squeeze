@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+.env.local
+.DS_Store
+# generated demo artifacts (reproducible via make_demo.py)
+demo/transcripts.json
+demo/fleet_out.json
+demo/frontend.json
+demo/backend.json
+demo/infra.json
+outputs/
