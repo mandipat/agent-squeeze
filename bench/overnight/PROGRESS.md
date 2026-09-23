@@ -1035,3 +1035,49 @@ in tests). Fail-safe (never empty a tool result) holds in both modes.
 **Blocked:** live-Jev verification still waits on the OpenRouter key cap reset.
 
 **Awaiting push:** everything since the sprint started (local commits only).
+
+## Run 21 — two-tier regression on all fixtures (Run 20 follow-up)
+
+**What:** answered Run 20's open question — does two-tier chunking regress
+evidence recall on the adversarial transcripts? Built
+`bench/chunk_tiers/bench_fixtures.py` (runs all 10 `bench/inputs/*.json`
+fixtures through `squeeze_transcript` in both modes) and
+`test_chunk_tiers_regression.py` (3 tests). Deterministic perfect-evidence
+judge (keep chunk iff it contains an evidence string, case-insensitive) —
+isolates chunking policy, no Jev, no OpenRouter, cap untouched.
+
+**Numbers** (reduction % single → two, judge calls, recall both modes):
+
+| fixture | tokens | err-dense | single-tier | two-tier | delta | recall |
+|---|---|---|---|---|---|---|
+| mixed_grind | 28703 | 11 | 0.0% (42) | 26.75% (64) | **+26.75** | 2/2 |
+| github_triage | 7788 | 1 | 40.97% (6) | 55.42% (12) | **+14.45** | 4/4 |
+| sre_incident | 7942 | 1 | 41.84% (7) | 56.01% (14) | **+14.17** | 3/3 |
+| dup_tools | 30011 | 3 | 17.27% (37) | 28.51% (49) | **+11.24** | 2/2 |
+| real_task2 | 38069 | 4 | 58.74% (31) | 69.64% (84) | **+10.90** | 2/2 |
+| codebase_exploration | 7998 | 0 | 42.22% (6) | 42.22% (6) | +0.00 | 3/3 |
+| skill_loads | 28687 | 0 | 39.40% (25) | 39.40% (25) | +0.00 | 2/2 |
+| real_task1/3/4 | ~300 ea | 0 | 0.0% | 0.0% | +0.00 | 2/2 |
+
+**Verdict: no regression anywhere.** Recall is 100% in both modes on all
+fixtures (no needle lost to finer chunk boundaries); two-tier reduction is
+never worse (prose-only fixtures byte-identical, asserted in tests). The
+mixed_grind case is the big story: at 6000-char chunks the needles landed in
+nearly every chunk (0% reduction); at 1500 chars they localize to fewer
+chunks → 26.75%. Trade-off: 1.3–2.7x more judge calls on error-dense
+results.
+
+**Files:** `bench/chunk_tiers/bench_fixtures.py`,
+`bench/chunk_tiers/test_chunk_tiers_regression.py` (3/3 pass), Run-20's
+4/4 chunk-tier tests still green.
+
+**Next (candidate runs):**
+- Live-Jev A/B when the OpenRouter cap resets: does finer chunking improve
+  real-judge accuracy on error text, or just waste reduction? Re-run this
+  fixture bench with the real `jev.score_chunks`.
+- Fold two-tier into the cache-aware path (`squeeze_cache_aware`); measure
+  cache-hit-rate impact.
+
+**Blocked:** live-Jev verification still waits on the OpenRouter key cap reset.
+
+**Awaiting push:** everything since the sprint started (local commits only).
