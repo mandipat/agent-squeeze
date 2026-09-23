@@ -106,6 +106,9 @@ python -m agent_squeeze.cli squeeze transcript.jsonl --task "..." \
 python -m agent_squeeze.cli admit tool_results.jsonl --task "..." \
   -o admitted.json
 
+# re-read a held result by ref (byte-identical), e.g. from the PostToolUse hook
+python -m agent_squeeze.cli admit-readmit "⟦held:bash/0003⟧" > full_result.txt
+
 # admit via the HTTP service; held payloads persist in
 # ~/.agent_squeeze/holds.json and resolve via /v1/readmit
 curl -s -X POST "$AGENT_SQUEEZE_URL/v1/admit" \

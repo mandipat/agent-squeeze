@@ -76,7 +76,6 @@ full price on every byte, every turn.
 
 **Awaiting push:** everything since the sprint started (local commits only).
 
-
 ## Run 2 — 2026-09-22 23:45 PDT: wire cache-aware squeeze into CLI + server
 
 **What:** `--protect-prefix N` flag on `cli squeeze` (0 = classic path,
@@ -283,3 +282,55 @@ test_context (all pass).
 **Awaiting push:** everything since the sprint started (local commits only).
 
 
+## Run 6 — 2026-09-23 00:30 PDT: PostToolUse admit-time hook + write-time annotations
+
+**What:** new `claude-plugin/hooks/admit-posttooluse.py` (stdlib-only
+PostToolUse hook) + `test_admit_posttooluse.py` (6 tests, all pass);
+annotation log + `annotation_probs` in `agent_squeeze/admit.py`;
+`admit-readmit` CLI subcommand; hooks README recipe + settings snippet.
+
+**Why:** the candidate from Runs 4–5: gate inside the tool loop. Relevance
+is judged best when fresh — right after the tool call, not against cold
+history (pi-jev-context: retroactive pruning dropped 73% of later-needed
+items; write-time trim saved 31–53% with 0 key lines lost). The hook judges
+each result with the free deterministic gate (Jev optional via
+`AGENT_SQUEEZE_ADMIT_JEV=1`), appends the judgment to
+`~/.agent_squeeze/admit-annotations.jsonl`, and injects the admitted text
+(verbatim excerpt + hold ref) as `additionalContext` on trim/notice/hold —
+`keep_full` stays silent. `annotation_probs` turns the log into per-chunk
+keep priors that plug straight into `squeeze_with_policy`, so fresh
+write-time judgments anchor the next retroactive squeeze instead of the
+pruner guessing cold.
+
+**Honest limit (documented in README):** PostToolUse cannot rewrite the
+tool result already in the transcript; the raw result stays in history. The
+hook steers the model to the gated excerpt and records the judgment — the
+token savings land on the next squeeze pass.
+
+**Numbers** (deterministic heuristic, zero paid calls — no Jev, decision
+cache and OpenRouter key untouched):
+
+| test | result |
+|---|---|
+| 800-line boilerplate heartbeat | notice: excerpt + ref injected, full text NOT re-emitted, hold byte-identical |
+| long traceback error | keep_full, hook silent |
+| 2-char result | keep_full, hook silent |
+| dict tool_response | extracted, notice |
+| malformed stdin / empty payload | exit 0 silent |
+| annotation priors → `squeeze_with_policy` | notice-annotated result's chunks 2 → 1 kept (squeezer's conservative keep-one-chunk floor); unmatched message → neutral 0.5 |
+
+CLI `admit-readmit`: ref resolves byte-identically; unknown ref → exit 1
+with clear stderr.
+
+**Next (candidate runs):**
+- Jev-call benchmark on synthetic_monitoring / admit corpus to verify the
+  deterministic policy tracks real Jev keep/drop (batch questions, reuse
+  `~/.agent_squeeze/decisions.sqlite` — key near cap).
+- TypeScript SDK spike; MCP server compression recipe; `--protect-prefix`
+  into `fleet` and the v2 pruner.
+- Live-fire the PostToolUse hook in a real Claude Code session; measure how
+  often the model actually acts on the excerpt vs the raw result.
+
+**Blocked:** nothing.
+
+**Awaiting push:** everything since the sprint started (local commits only).

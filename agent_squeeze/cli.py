@@ -67,6 +67,19 @@ def cmd_squeeze(args):
         sys.exit(0 if ok else 1)
 
 
+def cmd_admit_readmit(args):
+    # Resolve a hold ref (e.g. ⟦held:bash/0003⟧) issued by the admit gate,
+    # the admit-time hook, or /v1/admit-batch. Byte-identical to the held
+    # payload; unknown refs print an error and exit 1.
+    store = PersistentHoldStore()
+    try:
+        text = store.readmit(args.ref)
+    except KeyError:
+        print(f"admit-readmit: unknown ref {args.ref}", file=sys.stderr)
+        sys.exit(1)
+    sys.stdout.write(text)
+
+
 def cmd_admit(args):
     # Input: JSONL, one {"name": ..., "text": ...} per line (a tool-result
     # log). Each result is judged before context entry; trimmed/noticed/held
@@ -152,8 +165,12 @@ def main():
     a.add_argument("--task", required=False, default=None,
                    help="the agent's OBJECTIVE (what the results are judged against).")
     a.add_argument("--needles", default=None)
+    r = sub.add_parser("admit-readmit",
+                       help="resolve a hold ref issued by the admit gate")
+    r.add_argument("ref", help="e.g. ⟦held:bash/0003⟧")
     args = ap.parse_args()
-    {"squeeze": cmd_squeeze, "fleet": cmd_fleet, "admit": cmd_admit}[args.cmd](args)
+    {"squeeze": cmd_squeeze, "fleet": cmd_fleet, "admit": cmd_admit,
+     "admit-readmit": cmd_admit_readmit}[args.cmd](args)
 
 
 if __name__ == "__main__":

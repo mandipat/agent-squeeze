@@ -30,10 +30,12 @@ heuristic below when no policy is available / for tests.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
 import threading
+import time
 from dataclasses import dataclass, field
 
 from . import jev
@@ -289,3 +291,154 @@ def admit_session(tool_results, task="", store=None, policy_fn=None):
         "jev_cost_usd": round(total_cost, 6),
     }
     return admissions, stats
+
+
+# ---------------------------------------------------------------------------
+# Write-time annotations: PostToolUse hook -> annotation log -> squeezer
+# ---------------------------------------------------------------------------
+#
+# A PostToolUse hook cannot rewrite the tool result already in the transcript,
+# so write-time gating works in two halves: (1) the hook judges the result
+# *when relevance is freshest* and appends an annotation to a JSONL log
+# (plus a verbatim excerpt + hold ref in additionalContext for trim/notice/
+# hold decisions); (2) the retroactive squeezer reads the log and uses the
+# recorded decisions as keep/drop priors via `annotation_probs` below. This
+# is the safe direction of the pi-jev-context lesson — fresh judgments
+# *anchor* retroactive pruning instead of the pruner guessing cold.
+
+ANNOT_LOG_FILENAME = "admit-annotations.jsonl"
+ANNOT_HEAD_CHARS = 200  # hashed prefix used to match a transcript message
+ANNOT_TAIL_CHARS = 200  # hashed suffix used to match a transcript message
+
+# Annotation decision -> keep probability used as a prior by the squeezer.
+ANNOT_PRIORS = {KEEP_FULL: 1.0, TRIM: 0.5, NOTICE: 0.0, HOLD: 0.0}
+
+
+def _annot_path():
+    hold_dir = os.path.expanduser(
+        os.environ.get("AGENT_SQUEEZE_HOLD_DIR", "~/.agent_squeeze"))
+    return os.path.join(hold_dir, ANNOT_LOG_FILENAME)
+
+
+def _text_key(name, text):
+    h = lambda s: hashlib.sha1(s.encode("utf-8", "replace")).hexdigest()[:16]
+    return {"name": name or "tool",
+            "in_chars": len(text or ""),
+            "head_hash": h((text or "")[:ANNOT_HEAD_CHARS]),
+            "tail_hash": h((text or "")[-ANNOT_TAIL_CHARS:])}
+
+
+def log_annotation(name, text, decision, ref, session_id="", cost_usd=0.0):
+    """Append one write-time judgment to the annotation log.
+
+    Returns the record dict. Best-effort: never raises (the hook must not
+    break the user's session if the log is unwritable).
+    """
+    record = {"ts": time.time(), "session_id": session_id or "",
+              "decision": decision, "ref": ref,
+              "cost_usd": round(cost_usd, 6)}
+    record.update(_text_key(name, text))
+    try:
+        os.makedirs(os.path.dirname(_annot_path()), exist_ok=True)
+        with open(_annot_path(), "a") as f:
+            f.write(json.dumps(record) + "\n")
+    except OSError:
+        pass
+    return record
+
+
+def load_annotations(session_id=None):
+    """Read the annotation log. Filter to one session when given."""
+    records = []
+    try:
+        with open(_annot_path()) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    r = json.loads(line)
+                except ValueError:
+                    continue
+                if session_id and r.get("session_id") != session_id:
+                    continue
+                records.append(r)
+    except OSError:
+        pass
+    return records
+
+
+def _match_annotation(name, content, annotations):
+    key = _text_key(name, content)
+    # strict match first: name + length + head/tail hashes
+    for a in annotations:
+        if (a.get("name") == key["name"]
+                and a.get("in_chars") == key["in_chars"]
+                and a.get("head_hash") == key["head_hash"]
+                and a.get("tail_hash") == key["tail_hash"]):
+            return a
+    # fallback: name + length (transcript may rewrap whitespace)
+    for a in annotations:
+        if (a.get("name") == key["name"]
+                and a.get("in_chars") == key["in_chars"]):
+            return a
+    return None
+
+
+def annotation_probs(messages, task, annotations, base_policy_fn=None,
+                     threshold=0.5):
+    """Per-chunk keep probabilities for `cache.squeeze_with_policy`.
+
+    Chunk order matches squeeze_with_policy's chunking exactly (same
+    chunk_text over tool messages in order), so the returned probs align 1:1
+    with its chunk list. Tool messages matched to a write-time annotation
+    get that decision's prior on every chunk; unmatched messages defer to
+    `base_policy_fn(chunk_texts, task) -> (probs, cost)` (or a neutral 0.5
+    when None — the squeezer's conservative keep-one-chunk rule still
+    applies per message).
+    """
+    from .squeeze import chunk_text  # local import: avoid a module cycle
+
+    tool_msgs = [(pos, m) for pos, m in enumerate(messages)
+                 if m.get("role") == "tool"]
+    chunks = []  # (chunk_text, msg_index)
+    for pos, m in tool_msgs:
+        content = m.get("content", "") or ""
+        for c in chunk_text(content):
+            chunks.append((c, len(chunks)))
+
+    probs = [None] * len(chunks)
+
+    # group chunk indices per tool message, then assign per message
+    by_msg = {}
+    ci = 0
+    for pos, m in tool_msgs:
+        content = m.get("content", "") or ""
+        n = len(list(chunk_text(content)))
+        by_msg[pos] = list(range(ci, ci + n))
+        ci += n
+
+    unmatched_texts, unmatched_idx = [], []
+    for pos, idxs in by_msg.items():
+        m = tool_msgs[[p for p, _ in tool_msgs].index(pos)][1]
+        a = _match_annotation(m.get("name"), m.get("content", "") or "",
+                              annotations)
+        if a is not None:
+            p = ANNOT_PRIORS.get(a.get("decision"), 0.5)
+            for i in idxs:
+                probs[i] = p
+        else:
+            for i in idxs:
+                unmatched_texts.append(chunks[i][0])
+                unmatched_idx.append(i)
+
+    cost = 0.0
+    if unmatched_texts:
+        if base_policy_fn is not None:
+            bprobs, cost = base_policy_fn(unmatched_texts, task)
+            for i, p in zip(unmatched_idx, bprobs):
+                probs[i] = p
+        else:
+            for i in unmatched_idx:
+                probs[i] = 0.5
+    return probs, cost
