@@ -13,3 +13,5 @@ demo/frontend.json
 demo/backend.json
 demo/infra.json
 outputs/
+node_modules/
+ts-sdk/dist/

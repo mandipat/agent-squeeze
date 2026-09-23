@@ -127,6 +127,15 @@ curl -s -X POST "$AGENT_SQUEEZE_URL/v1/squeeze-cache-aware" \
 # free deterministic policy by default; AGENT_SQUEEZE_MCP_JEV=1 for real Jev
 claude mcp add agent-squeeze -- python3 -m agent_squeeze.mcp_server
 # tools: squeeze_transcript, admit_tool_result, readmit — see bench/mcp_server/
+
+# TypeScript SDK (zero runtime deps): typed client for every /v1/* endpoint
+#   npm i @agent-squeeze/sdk   (or npm pack from ts-sdk/)
+import { AgentSqueezeClient } from "@agent-squeeze/sdk";
+const client = new AgentSqueezeClient(); // AGENT_SQUEEZE_TOKEN env for auth
+const { messages, stats } = await client.squeezeCacheAware(transcript, task, 1024);
+const admission = await client.admit("bash", resultText, task);
+if (admission.ref) { const { text } = await client.readmit(admission.ref); }
+# see ts-sdk/ (README, examples/quickstart.mjs)
 ```
 
 `--task` defaults to the transcript's first user message (the agent's

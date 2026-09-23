@@ -1,0 +1,43 @@
+{
+  "description": "TypeScript SDK for agent-squeeze: token compression, cache-aware squeeze, and admit-time tool-result gating",
+  "devDependencies": {
+    "@types/node": "26.6.2",
+    "typescript": "^5.6.0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "keywords": [
+    "llm",
+    "agents",
+    "context",
+    "compression",
+    "claude-code"
+  ],
+  "license": "MIT",
+  "main": "dist/index.js",
+  "name": "@agent-squeeze/sdk",
+  "repository": {
+    "directory": "ts-sdk",
+    "type": "git",
+    "url": "https://github.com/mandipat/agent-squeeze"
+  },
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build",
+    "test": "npm run build && node --test test/client.test.mjs"
+  },
+  "type": "module",
+  "types": "dist/index.d.ts",
+  "version": "0.1.0"
+}

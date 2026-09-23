@@ -376,3 +376,49 @@ Note: pytest is not installed on this VM — tests ran via a plain
 
 **Awaiting push:** everything since the sprint started (local commits only).
 
+
+## Run 8 — 2026-09-23 00:58 PDT: TypeScript SDK spike (@agent-squeeze/sdk)
+
+**What:** new `ts-sdk/` package — typed client (`AgentSqueezeClient`) for all
+7 service endpoints (`/v1/squeeze`, `/v1/squeeze-cache-aware`,
+`/v1/squeeze-fleet`, `/v1/admit`, `/v1/admit-batch`, `/v1/readmit`,
+`/v1/readmit-if-mentioned`) plus bearer auth via `AGENT_SQUEEZE_TOKEN` env and
+per-request timeouts. Zero runtime dependencies (Node ≥ 18 global fetch);
+ships `dist/` via `npm run build` (tsc, committed as source only).
+`AgentSqueezeError` carries `.status`/`.body` (e.g. 404 on unknown readmit
+ref). Includes `README.md`, `examples/quickstart.mjs`, and a `node:test`
+suite that spins up a stub HTTP service and round-trips every endpoint.
+Repo README "Use" now shows the SDK path. `.gitignore` gained
+`node_modules/` and `ts-sdk/dist/`.
+
+**Why:** the TypeScript-SDK candidate from the mission list. Python CLI + HTTP
+service covered server-side agents; TS/Node agents (LangChain.js, Vercel AI
+SDK, Mastra, Claude Code hooks in TS) had no typed on-ramp. The SDK also
+makes the service's JSON contract explicit — any endpoint drift now fails
+compilation of the typed response shapes.
+
+**Numbers** (offline, zero paid calls — no Jev, decision cache and OpenRouter
+key untouched):
+
+| check | result |
+|---|---|
+| `tsc` strict build (noUnusedLocals/Parameters) | clean |
+| `node --test test/client.test.mjs` (stub HTTP service) | 1/1 pass — all 7 endpoints round-trip; Bearer header asserted on every call; 404 → `AgentSqueezeError{status:404}` |
+| full suite via `npm test` | build + test green |
+
+Not yet live-fired against the real Python service (that would call the Jev
+policy on `/v1/squeeze` — paid; key near cap). Contract matches server.py
+request/response shapes by inspection.
+
+**Next (candidate runs):**
+- `--protect-prefix` into `fleet` and the v2 pruner.
+- Live-fire the PostToolUse hook in a real Claude Code session; measure how
+  often the model acts on the excerpt vs the raw result.
+- Jev-call benchmark on synthetic_monitoring / admit corpus to verify the
+  deterministic policies track real Jev keep/drop (batch questions, reuse
+  `~/.agent_squeeze/decisions.sqlite` — key near cap; consider waiting for
+  the cap reset).
+
+**Blocked:** nothing.
+
+**Awaiting push:** everything since the sprint started (local commits only).
