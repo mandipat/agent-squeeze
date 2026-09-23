@@ -1512,3 +1512,48 @@ README "Use" gained the two commands with verified examples.
 **Blocked:** live-Jev verification still waits on the OpenRouter key cap reset.
 
 **Awaiting push:** everything since the sprint started (local commits only).
+
+## Run 31 — 2026-09-23 06:57 PDT: opt-in semantic dedup (--allow-near-dup)
+
+**What:** closed the remaining ROADMAP Phase 3 item. `fleet.squeeze_fleet`
+gained `allow_near_dup=False` (default = exact-match only, autonomous
+behavior unchanged): near-duplicate tool outputs (token-set Jaccard ≥ 0.85)
+collapse like exact dupes, but the marker keeps the **differing lines
+verbatim** alongside the first occurrence — diff-preserving by design.
+The anti-Headroom property: on the mixed_grind failure fixture (three
+near-identical config dumps, needles `version = '3.7.2'` / `port = 9443`
+living ONLY in the last dump, where Headroom scored 0/2 unrecoverable),
+both modes score 2/2. New:
+- `fleet.py`: `_jaccard`, `_diff_lines`, near-dup grouping in pass 1,
+  `report["global_near_duplicates"]`.
+- `agent_squeeze fleet --allow-near-dup` CLI flag (README "Use" updated).
+- `agent_squeeze/test_neardup.py`: 5 tests (default-off, diff-preserving,
+  Headroom 0/2→2/2 regression, threshold respect, CLI end-to-end with
+  needles exit-code check).
+- Fixed two old monkeypatch wrappers (`test_fleet.py`, `test_overlap_wiring.py`)
+  to forward `**kwargs` — they wrapped `squeeze_fleet` with fixed signatures.
+
+**Numbers** (free deterministic keep-all policy everywhere, zero paid calls —
+no Jev, decision cache and OpenRouter key untouched):
+
+| check | result |
+|---|---|
+| new `test_neardup.py` | 5/5 pass |
+| full suite | **138** test functions (133 + 5 new); all files exit 0 except `test_admit.py` (pre-existing runner quirk since Run 10, pristine-tree-identical) |
+| `bench --all` | 14/15 pass (live Jev skipped by design), 1.8s |
+| failure fixture, `--allow-near-dup` | 1390 → 592 tokens (**−57.4%**), 2 near-dups collapsed, needle recall **2/2** |
+| same fixture, default mode | 1390 → 1390 (0.0%), recall 2/2 — safe default unchanged |
+
+**Next (candidate runs):**
+- Live-Jev A/B when the cap resets: does real Jev beat the alias-table
+  judge on recall (needs fewer aliases, catches cross-domain tools)?
+- Multi-seed runs (ROADMAP Phase 1): 5 seeds per bench, mean ± std
+  (skipped in Run 30 planning — all current benches are deterministic,
+  so this needs a randomized bench first, e.g. adversarial sampling).
+- CLI/server/MCP surface for `allow_near_dup` beyond the fleet CLI
+  (server `/v1/squeeze-fleet` accepts the kwarg through the library only).
+- Real-session replays; LLM-judge answer-quality round (ROADMAP Phase 1).
+
+**Blocked:** live-Jev verification still waits on the OpenRouter key cap reset.
+
+**Awaiting push:** everything since the sprint started (local commits only).

@@ -92,10 +92,10 @@ def test_fleet_cli_protect():
     # from cli; instead wrap squeeze_fleet to inject the stub policy.
     def wrapped(transcripts, task=None, threshold=0.5, min_dup_chars=60,
                 protect_tokens=0, policy_fn=None, two_tier=True,
-                overlap_chars=0):
+                overlap_chars=0, **kwargs):
         return real(transcripts, task, threshold, min_dup_chars,
                     protect_tokens, stub_policy, two_tier=two_tier,
-                    overlap_chars=overlap_chars)
+                    overlap_chars=overlap_chars, **kwargs)
     cli.squeeze_fleet = wrapped
     try:
         argv = ["fleet", pa, pb, "--names", "a,b", "-o", outp,
@@ -127,12 +127,12 @@ def test_fleet_cli_single_tier():
 
     def spy(transcripts, task=None, threshold=0.5, min_dup_chars=60,
             protect_tokens=0, policy_fn=None, two_tier=True,
-            overlap_chars=0):
+            overlap_chars=0, **kwargs):
         seen["two_tier"] = two_tier
         seen["overlap_chars"] = overlap_chars
         return real(transcripts, task, threshold, min_dup_chars,
                     protect_tokens, stub_policy, two_tier=two_tier,
-                    overlap_chars=overlap_chars)
+                    overlap_chars=overlap_chars, **kwargs)
     cli.squeeze_fleet = spy
 
     def run_cli(extra):

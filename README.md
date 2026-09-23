@@ -143,6 +143,11 @@ python -m agent_squeeze.cli fleet fe.jsonl be.jsonl infra.jsonl \
 python -m agent_squeeze.cli fleet fe.jsonl be.jsonl -o fleet.json \
   --protect-prefix 1024
 # /v1/squeeze-fleet accepts "protect_tokens" (default 0) for the same
+# opt-in near-duplicate collapse for fleets (exact-match is the default):
+# the first occurrence stays verbatim and each collapsed copy keeps its
+# differing lines in the marker, so answer-critical deltas are never lost
+python -m agent_squeeze.cli fleet fe.jsonl be.jsonl -o fleet.json \
+  --allow-near-dup
 
 # cache-aware: keep the first 4096 tokens byte-identical (prompt-cache safe)
 python -m agent_squeeze.cli squeeze transcript.jsonl --task "..." \

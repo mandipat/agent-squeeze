@@ -133,11 +133,11 @@ def test_cli_fleet_overlap_propagates():
 
     def spy(transcripts, task=None, threshold=0.5, min_dup_chars=60,
             protect_tokens=0, policy_fn=None, two_tier=True,
-            overlap_chars=0):
+            overlap_chars=0, **kwargs):
         seen.update({"two_tier": two_tier, "overlap_chars": overlap_chars})
         return real(transcripts, task, threshold, min_dup_chars,
                     protect_tokens, stub_policy, two_tier=two_tier,
-                    overlap_chars=overlap_chars)
+                    overlap_chars=overlap_chars, **kwargs)
 
     cli.squeeze_fleet = spy
     try:

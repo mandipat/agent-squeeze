@@ -26,9 +26,15 @@ This is the living plan. Every item ends in a benchmark number, not a vibe.
       for prose — finer keep/drop granularity where it matters. (done: Runs
       20–22; default-on in squeeze.py/cache.py/fleet.py; `--single-tier`
       disables on all CLI paths incl. `--protect-prefix` and fleet)
-- [ ] **Cross-agent *semantic* dedup (opt-in).** Exact-match is the safe
-      default; add an explicit `--allow-near-dup` mode with the Headroom
-      failure case as a regression test that must stay green.
+- [x] **Cross-agent *semantic* dedup (opt-in).** Exact-match is the safe
+      default; `--allow-near-dup` collapses near-duplicates (Jaccard ≥ 0.85)
+      with the first occurrence kept verbatim and the *differing lines* of
+      each collapsed copy preserved in the marker — so the Headroom
+      failure case (needle living only in a later dump) stays green by
+      construction. (done: Run 31 — `fleet.squeeze_fleet(allow_near_dup=…)`,
+      `agent-squeeze fleet --allow-near-dup`, 5 tests in `test_neardup.py`
+      incl. the Headroom 0/2→2/2 regression; on the failure fixture
+      1390 → 592 tokens, −57.4%, recall 2/2.)
 - [x] **Tool-definition pruning.** Agents carry 50–200 MCP tool definitions
       every turn; Jev-prune the tool *list* per task (cf. jev-tool-permissions).
       (done: Run 28 — `agent_squeeze/tooldef.py`: recently-called tools are

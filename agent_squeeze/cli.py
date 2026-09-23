@@ -126,11 +126,13 @@ def cmd_fleet(args):
     squeezed, report = squeeze_fleet(transcripts, task, args.threshold,
                                      protect_tokens=args.protect_prefix,
                                      two_tier=not args.single_tier,
-                                     overlap_chars=args.overlap_chars)
+                                     overlap_chars=args.overlap_chars,
+                                     allow_near_dup=args.allow_near_dup)
     r = report
     print(f"fleet: {r['fleet_tokens_before']} -> {r['fleet_tokens_after']} tokens "
           f"({r['fleet_reduction_pct']}% reduction), "
           f"{r['global_exact_duplicates']} cross-agent duplicates, "
+          f"{r['global_near_duplicates']} near-duplicates, "
           f"${r['total_cost_usd']:.6f} in {r['latency_s']}s")
     _save(args.output, {"transcripts": squeezed, "report": report})
     if args.needles:
@@ -282,6 +284,11 @@ def main():
                    help="overlap window (chars) on hard-split chunks so "
                         "fragment-blind judges see boundary-straddling "
                         "evidence whole. 100 recommended; 0 = off.")
+    f.add_argument("--allow-near-dup", action="store_true",
+                   help="opt-in: collapse near-duplicate tool outputs too "
+                        "(diff-preserving — differing lines stay verbatim "
+                        "in the marker, so the Headroom failure case stays "
+                        "green). Default is exact-match dedup only.")
     f.add_argument("--needles", default=None)
     a = sub.add_parser("admit", help="gate tool results before context entry")
     a.add_argument("input", help="JSONL: one {\"name\": ..., \"text\": ...} per line")
