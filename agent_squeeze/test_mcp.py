@@ -31,7 +31,8 @@ def test_initialize():
 def test_tools_list():
     s, _, _ = mk_server()
     names = [t["name"] for t in call(s, "tools/list")["result"]["tools"]]
-    assert set(names) == {"squeeze_transcript", "admit_tool_result", "readmit"}
+    assert set(names) == {"squeeze_transcript", "admit_tool_result",
+                          "readmit", "recommend_ttl"}
     for t in call(s, "tools/list", rid=2)["result"]["tools"]:
         assert "inputSchema" in t
 
@@ -96,6 +97,32 @@ def test_readmit_unknown_ref_errors():
         r = call(s, "tools/call", {"name": "readmit",
                                    "arguments": {"ref": "nope"}})
         assert r["error"]["code"] == -32602
+
+
+def test_recommend_ttl_slow_gaps_pick_1hour():
+    s, _, _ = mk_server()
+    r = call(s, "tools/call",
+             {"name": "recommend_ttl",
+              "arguments": {"turn_gaps_sec": [600, 900, 1200]}})
+    payload = json.loads(r["result"]["content"][0]["text"])
+    assert payload["recommended"] == "1hour"
+    assert payload["cost_1hour_usd"] < payload["cost_5min_usd"]
+    assert payload["saving_pct"] > 0
+
+
+def test_recommend_ttl_burst_gaps_pick_5min():
+    s, _, _ = mk_server()
+    r = call(s, "tools/call",
+             {"name": "recommend_ttl",
+              "arguments": {"turn_gaps_sec": [30, 45, 60]}})
+    payload = json.loads(r["result"]["content"][0]["text"])
+    assert payload["recommended"] == "5min"
+
+
+def test_recommend_ttl_missing_gaps_errors():
+    s, _, _ = mk_server()
+    r = call(s, "tools/call", {"name": "recommend_ttl", "arguments": {}})
+    assert r["error"]["code"] == -32602
 
 
 def test_parse_error_and_serve_forever():

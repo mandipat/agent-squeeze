@@ -812,3 +812,49 @@ OpenRouter key untouched):
 
 **Awaiting push:** everything since the sprint started (local commits only).
 
+## Run 17 — 2026-09-23 03:13 PDT: `recommend_ttl` MCP tool
+
+**What:** the MCP server exposed only the 3 compression tools — the Run 15
+TTL recommender (Run 16 wired it into CLI + HTTP + TS SDK) was unreachable
+from MCP hosts. Added `recommend_ttl` to `agent_squeeze/mcp_server.py`:
+takes `turn_gaps_sec` (required) + optional `prefix_tokens` (default
+200k), `dynamic_tokens` (2k), `base_per_mtok` (3.0); returns the same
+verdict shape as `ttl.recommend_ttl` (`recommended`, costs, `saving_pct`,
+hit rates, rounded). Pure arithmetic, no network, $0 — consistent with the
+server's free-deterministic default. Updated the docstring ("Three tools" →
+"Four tools"), `bench/mcp_server/README.md` tool table, and the top-level
+README tools list. New `test_recommend_ttl_*` tests in
+`agent_squeeze/test_mcp.py` (3 tests; `tools/list` assertion now expects
+the 4-tool set).
+
+**Why:** the candidate queued at Run 16. An MCP host (Claude Desktop,
+Claude Code) running agent-squeeze compression via the stdio server had no
+way to ask "which cache TTL should this session use?" without also running
+the HTTP service — the cheapest path for a small agent just got one tool
+cheaper.
+
+**Numbers** (offline, zero paid calls — no Jev, decision cache and OpenRouter
+key untouched):
+
+| check | result |
+|---|---|
+| `tools/call recommend_ttl` gaps [600,900,1200] | `1hour` (1hour < 5min cost, saving > 0) |
+| `tools/call recommend_ttl` gaps [30,45,60] | `5min` |
+| `tools/call recommend_ttl` missing gaps | −32602 as designed |
+| `tools/list` | 4 tools with inputSchemas |
+| full Python suite | 72 passed, 0 failed (69 prior + 3 new) |
+
+**Next (candidate runs):**
+- Live-fire the PostToolUse hook in a real Claude Code session; measure how
+  often the model acts on the excerpt vs the raw result.
+- Jev-call benchmark on synthetic_monitoring / admit corpus to verify the
+  deterministic policies track real Jev keep/drop (batch questions, reuse
+  `~/.agent_squeeze/decisions.sqlite` — key near cap; consider waiting for
+  the cap reset).
+- Voice/conversational-agent sector: compression of long spoken-dialogue
+  transcripts (turns are short, interruptions heavy) — new bloat profile.
+
+**Blocked:** nothing.
+
+**Awaiting push:** everything since the sprint started (local commits only).
+

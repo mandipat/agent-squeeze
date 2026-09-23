@@ -149,7 +149,7 @@ curl -s -X POST "$AGENT_SQUEEZE_URL/v1/squeeze-cache-aware" \
 # MCP server (Claude Desktop / Claude Code): compression as tools, stdio
 # free deterministic policy by default; AGENT_SQUEEZE_MCP_JEV=1 for real Jev
 claude mcp add agent-squeeze -- python3 -m agent_squeeze.mcp_server
-# tools: squeeze_transcript, admit_tool_result, readmit — see bench/mcp_server/
+# tools: squeeze_transcript, admit_tool_result, readmit, recommend_ttl — see bench/mcp_server/
 
 # TypeScript SDK (zero runtime deps): typed client for every /v1/* endpoint
 #   npm i @agent-squeeze/sdk   (or npm pack from ts-sdk/)

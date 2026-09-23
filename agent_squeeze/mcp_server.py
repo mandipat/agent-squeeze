@@ -2,7 +2,7 @@
 
 Why: agents that speak MCP (Claude Desktop, Claude Code, any MCP host) can
 call token compression as tools instead of hitting the HTTP service.
-Three tools:
+Four tools:
 
   squeeze_transcript — cache-aware squeeze of a message list. The protected
                        prefix is returned byte-identical so provider prompt
@@ -13,6 +13,8 @@ Three tools:
                        held payloads round-trip byte-identically via readmit.
   readmit            — resolve a hold ref (e.g. "⟦held:bash/0003⟧") back to
                        the byte-identical payload.
+  recommend_ttl        — pick the cheaper prompt-cache TTL (5-min vs 1-hour)
+                       from observed inter-turn gaps. Pure arithmetic, $0.
 
 Default policy is deterministic and free (no network): the squeeze tool
 drops chunks that look like boilerplate (low unique-line ratio, mirroring
@@ -32,6 +34,7 @@ from .admit import admit_tool_result, PersistentHoldStore
 from .cache import squeeze_cache_aware
 from .messages import from_openai, infer_task
 from . import jev
+from .ttl import recommend_ttl
 
 PROTOCOL_VERSION = "2024-11-05"
 SERVER_INFO = {"name": "agent-squeeze", "version": "0.1.0"}
@@ -96,6 +99,25 @@ def _tool_readmit(args):
     return {"ref": ref, "text": text}
 
 
+def _tool_ttl(args):
+    gaps = args.get("turn_gaps_sec") or args.get("gaps")
+    if not isinstance(gaps, list) or not gaps:
+        raise ValueError("turn_gaps_sec (list of seconds) is required")
+    try:
+        gaps = [float(g) for g in gaps]
+    except (TypeError, ValueError):
+        raise ValueError("turn_gaps_sec must be a list of numbers")
+    prefix = int(args.get("prefix_tokens", 200_000))
+    dynamic = int(args.get("dynamic_tokens", 2_000))
+    base = float(args.get("base_per_mtok", 3.0))
+    rec = recommend_ttl(gaps, prefix, dynamic, base)
+    rec["hit_rate_5min"] = round(rec["hit_rate_5min"], 3)
+    rec["hit_rate_1hour"] = round(rec["hit_rate_1hour"], 3)
+    rec["cost_5min_usd"] = round(rec["cost_5min_usd"], 4)
+    rec["cost_1hour_usd"] = round(rec["cost_1hour_usd"], 4)
+    return rec
+
+
 TOOLS = {
     "squeeze_transcript": {
         "fn": _tool_squeeze,
@@ -148,6 +170,29 @@ TOOLS = {
                 "ref": {"type": "string", "description": "hold ref"},
             },
             "required": ["ref"],
+        },
+    },
+    "recommend_ttl": {
+        "fn": _tool_ttl,
+        "description": ("Pick the cheaper Anthropic prompt-cache TTL "
+                        "(5-min vs 1-hour) for a session from its observed "
+                        "inter-turn gaps. Pure arithmetic, no network, $0."),
+        "schema": {
+            "type": "object",
+            "properties": {
+                "turn_gaps_sec": {"type": "array",
+                                  "description": "observed inter-turn gaps in "
+                                                 "seconds"},
+                "prefix_tokens": {"type": "integer",
+                                  "description": "protected prefix size, "
+                                                 "default 200000"},
+                "dynamic_tokens": {"type": "integer",
+                                   "description": "per-turn dynamic tail, "
+                                                  "default 2000"},
+                "base_per_mtok": {"type": "number",
+                                  "description": "base $/MTok, default 3.0"},
+            },
+            "required": ["turn_gaps_sec"],
         },
     },
 }
