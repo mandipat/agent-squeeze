@@ -664,3 +664,57 @@ collapse compounds.
 
 **Awaiting push:** everything since the sprint started (local commits only).
 
+## Run 14 — 2026-09-23 02:40 PDT: data-pipeline agent compression (new sector)
+
+**What:** new module `agent_squeeze/pipeline.py` + synthetic benchmark
+`bench/pipeline/run.py` + 7 unit tests (`agent_squeeze/test_pipeline.py`,
+all pass; full suite 56/56). Pipeline agents (ETL/ELT harnesses, step
+runners) bloat context with poll-interval heartbeats, connection banners,
+repeated DDL/schema echoes, row-sample reprints, and retry noise.
+`squeeze_pipeline_run` squeezes step-by-step with cross-step memory
+(`seen_schemas`, `seen_patterns`): decisions `keep_full` (errors/tracebacks,
+final metrics, short steps ≤400 chars — judging costs more than it saves
+at that size), `keep_excerpt` (verbatim metric/schema lines, rest held via
+`HoldStore`, byte-identical readmit), `notice` (pure progress/heartbeat
+steps, exact-duplicate schema echoes, pattern×N collapses). Free
+deterministic regex policy; a real Jev `policy_fn` is injectable. Nothing
+kept is ever rewritten — the admit-gate rule.
+
+**Why:** the data-pipeline-agent candidate from the mission list. Prior runs
+covered coding transcripts, fleet, research, support-chat, MCP, hooks, TS
+SDK, cache interplay; pipeline runners were the remaining high-noise
+sector. Its failure mode is distinct: failures hide in the middle of
+verbose steps, so errors are always kept verbatim and only metrics/schema
+lines survive otherwise.
+
+**Numbers** (deterministic policy, zero paid calls — no Jev, decision cache
+and OpenRouter key untouched):
+
+| check | result |
+|---|---|
+| synthetic 5-step ETL (connect, 60-heartbeat extract, transform with re-echoed DDL, traceback validate, load) | 3,331 → 825 chars (−75.2%), 832 → 206 tokens |
+| extract (60 heartbeats) | keep_excerpt: heartbeat noise gone, rows/duration/checksum kept |
+| transform (identical DDL to extract) | notice `[schema identical to earlier step]` |
+| validate (traceback + `negative revenue for order OR-99120`) | keep_full verbatim |
+| needle recall | 4/4 (OR-99120, 9f2c1ad4b8, 999,997, rows rejected: 3) |
+| held roundtrip | byte-identical |
+| unit tests | 7/7; full suite 56/56 (`test_admit` fails identically on pristine tree — pre-existing runner quirk per Run 10) |
+
+**Bug fixed during the run:** new files must run with `PYTHONPATH=.`
+(module-import fix, not a code bug); also the classic per-test fight with
+the `FULL_KEEP_CHARS` floor — fixtures padded past 400 chars so the judge
+path is actually exercised.
+
+**Next (candidate runs):**
+- Live-fire the PostToolUse hook in a real Claude Code session; measure how
+  often the model acts on the excerpt vs the raw result.
+- Jev-call benchmark on synthetic_monitoring / admit corpus to verify the
+  deterministic policies track real Jev keep/drop (batch questions, reuse
+  `~/.agent_squeeze/decisions.sqlite` — key near cap; consider waiting for
+  the cap reset).
+- Prompt-cache TTL tuning bench (5-min vs 1-hour breakpoints) per the
+  Masood numbers from Run 1 research.
+
+**Blocked:** nothing.
+
+**Awaiting push:** everything since the sprint started (local commits only).
