@@ -17,7 +17,7 @@ agent-squeeze = "agent_squeeze.cli:main"
 agent-squeeze-serve = "agent_squeeze.server:main"
 
 [project.urls]
-Repository = "https://github.com/your-org/agent-squeeze"
+Repository = "https://github.com/mandipat/agent-squeeze"
 
 [tool.setuptools.packages.find]
 where = ["."]
