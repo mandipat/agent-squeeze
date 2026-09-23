@@ -29,11 +29,12 @@ def stub_policy(chunks, task):
     return ([1.0 if NEEDLE in c else 0.0 for c in chunks], 0.0)
 
 
-# All tests here run offline: stub the shared jev module (squeeze.py and
-# cache.py both call `from . import jev; jev.score_chunks(...)`).
-import agent_squeeze.jev as jev_mod  # noqa: E402
-_jev_real = jev_mod.score_chunks
-jev_mod.score_chunks = stub_policy
+# NOTE: no import-time patching of the shared jev module here. Two tests in
+# this file used to rely on a module-level `jev_mod.score_chunks = stub_policy`
+# assignment; it leaked into any other test file loaded into the same process
+# (fragment-blind stub poisoning later files' Jev calls). Every path that needs
+# the offline stub now passes `policy_fn=stub_policy` explicitly, so importing
+# this module is side-effect free for the shared jev module.
 
 
 def mk_boundary_msgs(needle_offset):
@@ -74,10 +75,13 @@ def test_cli_squeeze_overlap_propagates():
     real = cli.squeeze_transcript
     seen = {}
 
-    def spy(messages, task, threshold=0.5, two_tier=True, overlap_chars=0):
+    def spy(messages, task, threshold=0.5, two_tier=True, overlap_chars=0,
+            **kw):
         seen.update({"two_tier": two_tier, "overlap_chars": overlap_chars})
+        # explicit stub policy: this path hits the real squeeze_transcript,
+        # so the stub must be passed in (no module-level jev patch anymore).
         return real(messages, task, threshold, two_tier=two_tier,
-                    overlap_chars=overlap_chars)
+                    overlap_chars=overlap_chars, policy_fn=stub_policy)
 
     cli.squeeze_transcript = spy
     try:
@@ -203,8 +207,10 @@ def test_server_accepts_overlap_and_single_tier():
 
     def sq(messages, task, threshold=0.5, two_tier=True, overlap_chars=0):
         seen["sq"] = (two_tier, overlap_chars)
+        # explicit stub policy (see note at module top): real_sq would call
+        # the paid jev.score_chunks without it.
         return real_sq(messages, task, threshold, two_tier=two_tier,
-                       overlap_chars=overlap_chars)
+                       overlap_chars=overlap_chars, policy_fn=stub_policy)
 
     def ca(messages, task, protect_tokens=1024, policy_fn=None,
            threshold=0.5, two_tier=True, overlap_chars=0):

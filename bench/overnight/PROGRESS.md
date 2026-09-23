@@ -1668,3 +1668,48 @@ decision cache and OpenRouter key untouched):
 **Blocked:** live-Jev verification still waits on the OpenRouter key cap reset.
 
 **Awaiting push:** everything since the sprint started (local commits only).
+
+## Run 34 — 2026-09-23 07:30 PDT: quarantine the leaked `jev.score_chunks` stub in `test_overlap_wiring.py` (Run 33's housekeeping item)
+
+**What:** answered Run 33's queued housekeeping item. `test_overlap_wiring.py`
+patched the shared `jev` module at import time
+(`jev_mod.score_chunks = stub_policy`, capturing `_jev_real` but never
+restoring it), so any multi-file runner loading this file into a shared
+process left later files calling the fragment-blind stub instead of real Jev
+(Run 33's `bench/chunk_tiers/test_two_tier_beats_single_tier_with_recall`
+"needle lost" failure). Fixed by deleting the import-time patch entirely —
+the file is now side-effect free to import — and passing
+`policy_fn=stub_policy` explicitly at the two call sites that depended on the
+global (the CLI `squeeze_transcript` spy and the server `/v1/squeeze`
+wrapper). The end-to-end boundary-needle test keeps its own local
+save/restore, unchanged.
+
+**Proof the original failure mode is gone:** in one process, import
+`test_overlap_wiring.py` then run the chunk_tiers keyed tests the way the
+overnight runner would — `test_two_tier_beats_single_tier_with_recall` and
+`test_prose_keeps_large_chunks_in_both_modes` now reach the *real*
+`jev.score_chunks` and skip as designed
+(`OPENROUTER_API_KEY is not set in the environment`) instead of silently
+judging with the leaked stub; `jev.score_chunks.__module__` still
+`agent_squeeze.jev` after the combined import.
+
+**Numbers** (free deterministic stub policies everywhere, zero paid calls —
+no Jev, decision cache and OpenRouter key untouched):
+
+| check | result |
+|---|---|
+| `test_overlap_wiring.py` standalone | 6/6 PASS |
+| shared-process import leak check | `jev.score_chunks` identity unchanged — no leak |
+| full suite, one process per file | **21 files pass**; only `test_admit.py` fails (relative-import runner quirk, pre-existing since Run 10, pristine-tree-identical) |
+| combined-import regression (the Run 33 scenario) | keyed tests reach real Jev / skip as designed; no "needle lost" |
+| `bench --all` | 14/15 pass (live Jev skipped by design), 1.7s |
+
+**Next (candidate runs):** — *none left this run window; sprint stops itself at
+08:00 PDT today per the body.* If the loop ever resumes: live-Jev A/B when
+the cap resets (near-dup on/off on the failure fixture); multi-seed runs
+(needs a randomized bench first); real-session replays; LLM-judge
+answer-quality round (ROADMAP Phase 1).
+
+**Blocked:** live-Jev verification still waits on the OpenRouter key cap reset.
+
+**Awaiting push:** everything since the sprint started (local commits only).
