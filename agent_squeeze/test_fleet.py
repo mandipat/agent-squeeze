@@ -91,9 +91,9 @@ def test_fleet_cli_protect():
     # Stub the Jev path by monkeypatching cache's jev reference is awkward
     # from cli; instead wrap squeeze_fleet to inject the stub policy.
     def wrapped(transcripts, task=None, threshold=0.5, min_dup_chars=60,
-                protect_tokens=0, policy_fn=None):
+                protect_tokens=0, policy_fn=None, two_tier=True):
         return real(transcripts, task, threshold, min_dup_chars,
-                    protect_tokens, stub_policy)
+                    protect_tokens, stub_policy, two_tier=two_tier)
     cli.squeeze_fleet = wrapped
     try:
         argv = ["fleet", pa, pb, "--names", "a,b", "-o", outp,
@@ -115,6 +115,41 @@ def test_fleet_cli_protect():
         cli.squeeze_fleet = real
 
 
+def test_fleet_cli_single_tier():
+    d = tempfile.mkdtemp()
+    pa = os.path.join(d, "a.json")
+    json.dump({"messages": make_transcripts()["a"]}, open(pa, "w"))
+    outp = os.path.join(d, "out.json")
+    real = cli.squeeze_fleet
+    seen = {}
+
+    def spy(transcripts, task=None, threshold=0.5, min_dup_chars=60,
+            protect_tokens=0, policy_fn=None, two_tier=True):
+        seen["two_tier"] = two_tier
+        return real(transcripts, task, threshold, min_dup_chars,
+                    protect_tokens, stub_policy, two_tier=two_tier)
+    cli.squeeze_fleet = spy
+
+    def run_cli(extra):
+        old = sys.argv
+        sys.argv = ["cli", "fleet", pa, "--names", "a", "-o", outp,
+                    "--protect-prefix", "100"] + extra
+        buf = io.StringIO()
+        try:
+            with redirect_stdout(buf):
+                cli.main()
+        finally:
+            sys.argv = old
+    try:
+        run_cli([])
+        assert seen.get("two_tier") is True, seen
+        run_cli(["--single-tier"])
+        assert seen.get("two_tier") is False, seen
+        print("test_fleet_cli_single_tier: PASS")
+    finally:
+        cli.squeeze_fleet = real
+
+
 def test_fleet_server_protect():
     t = make_transcripts()
     srv = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
@@ -125,10 +160,10 @@ def test_fleet_server_protect():
         real = server_mod.squeeze_fleet
 
         def wrapped(transcripts, task=None, threshold=0.5, min_dup_chars=60,
-                    protect_tokens=0, policy_fn=None):
+                    protect_tokens=0, policy_fn=None, **kw):
             return fleet_mod.squeeze_fleet(transcripts, task, threshold,
                                            min_dup_chars, protect_tokens,
-                                           stub_policy)
+                                           stub_policy, **kw)
         server_mod.squeeze_fleet = wrapped
         try:
             url = f"http://127.0.0.1:{srv.server_port}/v1/squeeze-fleet"
@@ -153,5 +188,6 @@ if __name__ == "__main__":
     test_fleet_protect_library()
     test_fleet_protect_default_unchanged()
     test_fleet_cli_protect()
+    test_fleet_cli_single_tier()
     test_fleet_server_protect()
     print("ALL FLEET TESTS PASS")

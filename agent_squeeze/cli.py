@@ -46,7 +46,7 @@ def cmd_squeeze(args):
     if args.protect_prefix > 0:
         out, stats = squeeze_cache_aware(
             messages, task, protect_tokens=args.protect_prefix,
-            threshold=args.threshold)
+            threshold=args.threshold, two_tier=not args.single_tier)
         print(f"cache-aware: prefix of ~{stats['protected_tokens']} tokens kept "
               f"byte-identical (cache-safe); dynamic tail "
               f"{stats['tokens_before'] - stats['protected_tokens']} -> "
@@ -121,7 +121,8 @@ def cmd_fleet(args):
     else:
         print("task: per-agent (inferred from each agent's first user message)")
     squeezed, report = squeeze_fleet(transcripts, task, args.threshold,
-                                     protect_tokens=args.protect_prefix)
+                                     protect_tokens=args.protect_prefix,
+                                     two_tier=not args.single_tier)
     r = report
     print(f"fleet: {r['fleet_tokens_before']} -> {r['fleet_tokens_after']} tokens "
           f"({r['fleet_reduction_pct']}% reduction), "
@@ -187,6 +188,10 @@ def main():
                    help="per agent: keep the first N tokens byte-identical "
                         "(prompt-cache safe); only each tail is squeezed. "
                         "0 = off.")
+    f.add_argument("--single-tier", action="store_true",
+                   help="disable two-tier chunking (uniform 6000-char chunks; "
+                        "default is fine 1500-char chunks for error-dense "
+                        "tool results)")
     f.add_argument("--needles", default=None)
     a = sub.add_parser("admit", help="gate tool results before context entry")
     a.add_argument("input", help="JSONL: one {\"name\": ..., \"text\": ...} per line")

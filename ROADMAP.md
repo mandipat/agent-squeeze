@@ -22,8 +22,10 @@ This is the living plan. Every item ends in a benchmark number, not a vibe.
       Jev-specific; calibrate each backend on the fixture set.
 
 ## Phase 3 — Compress more (without losing accuracy)
-- [ ] **Two-tier chunks.** Small chunks for error-dense regions, large chunks
-      for prose — finer keep/drop granularity where it matters.
+- [x] **Two-tier chunks.** Small chunks for error-dense regions, large chunks
+      for prose — finer keep/drop granularity where it matters. (done: Runs
+      20–22; default-on in squeeze.py/cache.py/fleet.py; `--single-tier`
+      disables on all CLI paths incl. `--protect-prefix` and fleet)
 - [ ] **Cross-agent *semantic* dedup (opt-in).** Exact-match is the safe
       default; add an explicit `--allow-near-dup` mode with the Headroom
       failure case as a regression test that must stay green.

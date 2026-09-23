@@ -44,14 +44,14 @@ def write_json(msgs):
     return path
 
 
-def run_squeeze_cli(msgs, protect_prefix):
+def run_squeeze_cli(msgs, protect_prefix, single_tier=False):
     in_path = write_json(msgs)
     out_path = in_path + ".out.json"
     try:
         args = cli.main.__globals__["argparse"].Namespace(
             cmd="squeeze", input=in_path, output=out_path, task=None,
             threshold=0.5, protect_prefix=protect_prefix, needles=None,
-            single_tier=False)
+            single_tier=single_tier)
         buf = io.StringIO()
         with redirect_stdout(buf):
             cli.cmd_squeeze(args)
@@ -95,6 +95,27 @@ def test_cli_off_by_default():
         cache_mod.jev.score_chunks = real
 
 
+def test_cli_single_tier_propagates():
+    # --single-tier on the --protect-prefix path must reach squeeze_cache_aware
+    real = cli.squeeze_cache_aware
+    seen = {}
+
+    def spy(messages, task, protect_tokens=1024, **kw):
+        seen.update(kw)
+        return real(messages, task, protect_tokens=protect_tokens,
+                    policy_fn=stub_policy, **kw)
+    cli.squeeze_cache_aware = spy
+    try:
+        msgs = mk_messages()
+        run_squeeze_cli(msgs, protect_prefix=100, single_tier=True)
+        assert seen.get("two_tier") is False, seen
+        run_squeeze_cli(msgs, protect_prefix=100, single_tier=False)
+        assert seen.get("two_tier") is True, seen
+        print(f"PASS cli --single-tier -> two_tier flag: True/False both wired")
+    finally:
+        cli.squeeze_cache_aware = real
+
+
 def test_server_endpoint():
     cache_mod.jev.score_chunks, real = stub_policy, cache_mod.jev.score_chunks
     try:
@@ -126,5 +147,6 @@ def test_server_endpoint():
 if __name__ == "__main__":
     test_cli_cache_aware()
     test_cli_off_by_default()
+    test_cli_single_tier_propagates()
     test_server_endpoint()
     print("all wiring tests passed")

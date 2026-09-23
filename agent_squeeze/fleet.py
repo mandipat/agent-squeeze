@@ -27,7 +27,7 @@ def _hash(text):
 
 
 def squeeze_fleet(transcripts, task=None, threshold=0.5, min_dup_chars=60,
-                  protect_tokens=0, policy_fn=None):
+                  protect_tokens=0, policy_fn=None, two_tier=True):
     """transcripts: {agent_id: [messages]}. Returns (squeezed, report).
 
     task: a single shared objective (str), a per-agent dict {agent_id: task},
@@ -45,6 +45,10 @@ def squeeze_fleet(transcripts, task=None, threshold=0.5, min_dup_chars=60,
           Defaults to real Jev when protect_tokens == 0, and to
           jev.score_chunks inside squeeze_cache_aware otherwise. Injectable
           for offline use.
+
+    two_tier: pass through to the per-agent squeeze — error-dense tool
+          results get finer chunks (default True; False = legacy uniform
+          chunking).
 
     Pass 1 — global exact-dedup across agents (in dict order; first agent wins).
     Pass 2 — per-agent squeeze on what remains.
@@ -80,9 +84,11 @@ def squeeze_fleet(transcripts, task=None, threshold=0.5, min_dup_chars=60,
             out, stats = squeeze_cache_aware(messages, agent_task,
                                              protect_tokens,
                                              policy_fn=policy_fn,
-                                             threshold=threshold)
+                                             threshold=threshold,
+                                             two_tier=two_tier)
         else:
-            out, stats = squeeze_transcript(messages, agent_task, threshold)
+            out, stats = squeeze_transcript(messages, agent_task, threshold,
+                                            two_tier=two_tier)
         squeezed[agent_id] = out
         per_agent[agent_id] = stats
         total_cost += stats["cost_usd"]
