@@ -334,3 +334,45 @@ with clear stderr.
 **Blocked:** nothing.
 
 **Awaiting push:** everything since the sprint started (local commits only).
+
+## Run 7 — 2026-09-23 00:43 PDT: MCP server (compression as MCP tools)
+
+**What:** new `agent_squeeze/mcp_server.py` (stdlib-only stdio JSON-RPC 2.0)
+exposing `squeeze_transcript`, `admit_tool_result`, `readmit` as MCP tools;
+`agent_squeeze/test_mcp.py` (7 tests, all pass); `bench/mcp_server/README.md`
+recipe (claude_desktop_config.json snippet + `claude mcp add`); README "Use"
++ skill SKILL.md notes; `agent-squeeze-mcp` console script in pyproject.
+
+**Why:** the MCP-server-compression candidate from the mission list. Agents
+on MCP hosts (Claude Desktop, Claude Code) get compression without running
+the HTTP service. Free deterministic policy by default — boilerplate-detector
+for squeeze, admit.py's deterministic heuristic for the admit gate — so the
+default path costs nothing and hits no paid endpoints (key near cap);
+`AGENT_SQUEEZE_MCP_JEV=1` opts into real TypeSafe Jev for squeeze.
+
+**Numbers** (offline, zero paid calls — no Jev, decision cache and OpenRouter
+key untouched):
+
+| test | result |
+|---|---|
+| 800-line heartbeat (2 chunks) + traceback transcript, protect=10 | boilerplate chunk dropped (`[squeezed: kept 1/2 chunks]`), traceback kept verbatim, cost $0 |
+| admit 800-line boilerplate → notice + ref; readmit | byte-identical roundtrip |
+| readmit unknown ref / unknown tool / parse error | −32602 / −32602 / −32700 as designed |
+| full suite (test_mcp, test_admit, test_admit_wiring, test_cache, test_cache_wiring, test_context) | 31 passed, 0 failed |
+
+Note: pytest is not installed on this VM — tests ran via a plain
+`test_*`-function runner (plain asserts, no fixtures), all pass.
+
+**Next (candidate runs):**
+- TypeScript SDK spike; `--protect-prefix` into `fleet` and the v2 pruner.
+- Jev-call benchmark on synthetic_monitoring / admit corpus to verify the
+  deterministic policies track real Jev keep/drop (batch questions, reuse
+  `~/.agent_squeeze/decisions.sqlite` — key near cap; consider waiting for
+  the cap reset).
+- Live-fire the PostToolUse hook in a real Claude Code session; measure how
+  often the model acts on the excerpt vs the raw result.
+
+**Blocked:** nothing.
+
+**Awaiting push:** everything since the sprint started (local commits only).
+
