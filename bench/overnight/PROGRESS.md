@@ -1374,3 +1374,59 @@ the pristine tree (relative-import runner quirk, pre-existing since Run
 **Blocked:** live-Jev verification still waits on the OpenRouter key cap reset.
 
 **Awaiting push:** everything since the sprint started (local commits only).
+
+## Run 28 — 2026-09-23 06:05 PDT: tool-definition pruning (ROADMAP Phase 3)
+
+**What:** answered the Phase 3 "tool-definition pruning" item. New module
+`agent_squeeze/tooldef.py` + synthetic benchmark `bench/tooldef/run.py` +
+7 unit tests (`agent_squeeze/test_tooldef.py`, all pass). Coding agents
+carry 50–200 tool definitions (each with a JSON schema) into every turn,
+and the list is rarely task-specific — the file-writing agent pays for the
+image-generation schema on every call. `prune_tool_definitions(tools,
+task, called, policy_fn, store)` decides per tool: `keep` (verbatim, never
+rewritten — the admit-gate rule) or `prune` (off-context, held via
+`HoldStore`, byte-identical recall by name via `readmit_tool`). Signal
+priority: (1) recently-called tools are sacred (the agent already
+demonstrated need); (2) task-vocabulary overlap over name + description +
+schema property names, with a small explicit alias table for task verbs
+("debug"/"fix" → file/read/grep/shell/command/test; "PR" → git/gh/pull —
+production Jev reasons this directly; the free judge carries the table);
+(3) fail-safe: an empty or signal-free task keeps EVERYTHING (losing a
+needed tool's schema is a hard failure; a fat list is only cost). Real-Jev
+production shape documented: one noul question per tool ("will the agent
+need {name} for this task?") asked in a single map-reduce decisions call —
+inject via `policy_fn`.
+
+**Bugs found by the benchmark (fixed this run):** (1) the free judge was
+too strict at first — recall 2/8 (only "pytest" matched the task text);
+the alias table lifted it to 8/8; (2) the name-fallback used substring
+matching, so the "gh" acronym alias false-kept "flight_status" — fallback
+removed, word-boundary matching only; (3) stopword "with" counted as task
+vocabulary, false-keeping "edit_image" — small STOP set added.
+
+**Numbers** (deterministic free policy, zero paid calls — no Jev, decision
+cache and OpenRouter key untouched):
+
+| check | result |
+|---|---|
+| synthetic 41-tool coding-agent harness ("Debug the failing pytest suite … open a PR") | 41 → 8 tools, 1547 → 318 tokens (−79.4%) |
+| needle recall (exec, read_file, write_file, edit_file, grep, git, gh, pytest) | **8/8** |
+| pruned definition readmit | byte-identical |
+| full Python suite | **122/122** test fns (115 prior + 7 new) |
+| `bench --all` | **14/15** pass (live Jev skipped by design), 1.8s |
+
+Also registered `tooldef` in the public bench harness (Run 27's registry),
+marked the ROADMAP Phase 3 checkbox done, and documented the module in the
+README chunking/tools section.
+
+**Next (candidate runs):**
+- Wire `prune_tool_definitions` into the server (`/v1/prune-tools`) and
+  MCP server so agents can prune their tool list live at session start.
+- Live-Jev A/B when the cap resets: does real Jev beat the alias-table
+  judge on recall (needs fewer aliases, catches cross-domain tools)?
+- Cross-agent *semantic* dedup (Phase 3, opt-in `--allow-near-dup`).
+- Multi-seed runs (ROADMAP Phase 1): 5 seeds per bench, mean ± std.
+
+**Blocked:** live-Jev verification still waits on the OpenRouter key cap reset.
+
+**Awaiting push:** everything since the sprint started (local commits only).
