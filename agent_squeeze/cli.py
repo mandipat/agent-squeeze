@@ -43,10 +43,6 @@ def cmd_squeeze(args):
     task = args.task or infer_task(messages)
     print(f"task: {task[:120]}{'...' if len(task) > 120 else ''}")
     print(f"loaded {len(messages)} messages, ~{transcript_tokens(messages)} tokens")
-    out, stats = squeeze_transcript(messages, task, args.threshold)
-    print(f"reduction: {stats['reduction_pct']}% "
-          f"({stats['tokens_before']} -> {stats['tokens_after']} tokens), "
-          f"${stats['cost_usd']:.6f} in {stats['latency_s']}s")
     if args.protect_prefix > 0:
         out, stats = squeeze_cache_aware(
             messages, task, protect_tokens=args.protect_prefix,
@@ -123,7 +119,8 @@ def cmd_fleet(args):
         print(f"task: {task[:120]}{'...' if len(task) > 120 else ''}")
     else:
         print("task: per-agent (inferred from each agent's first user message)")
-    squeezed, report = squeeze_fleet(transcripts, task, args.threshold)
+    squeezed, report = squeeze_fleet(transcripts, task, args.threshold,
+                                     protect_tokens=args.protect_prefix)
     r = report
     print(f"fleet: {r['fleet_tokens_before']} -> {r['fleet_tokens_after']} tokens "
           f"({r['fleet_reduction_pct']}% reduction), "
@@ -158,6 +155,10 @@ def main():
                    help="the agents' OBJECTIVE. Defaults to the first user message.")
     f.add_argument("--names", default=None)
     f.add_argument("--threshold", type=float, default=0.5)
+    f.add_argument("--protect-prefix", type=int, default=0,
+                   help="per agent: keep the first N tokens byte-identical "
+                        "(prompt-cache safe); only each tail is squeezed. "
+                        "0 = off.")
     f.add_argument("--needles", default=None)
     a = sub.add_parser("admit", help="gate tool results before context entry")
     a.add_argument("input", help="JSONL: one {\"name\": ..., \"text\": ...} per line")

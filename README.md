@@ -96,6 +96,11 @@ python -m agent_squeeze.cli squeeze ~/.claude/projects/myproj/transcript.jsonl \
 # a fleet of agents running simultaneously
 python -m agent_squeeze.cli fleet fe.jsonl be.jsonl infra.jsonl \
   --names frontend,backend,infra -o fleet.json --needles needles.txt
+# per-agent prompt-cache-safe mode: keep the first 1024 tokens of each
+# agent's transcript byte-identical so fleet sessions stay on the cache
+python -m agent_squeeze.cli fleet fe.jsonl be.jsonl -o fleet.json \
+  --protect-prefix 1024
+# /v1/squeeze-fleet accepts "protect_tokens" (default 0) for the same
 
 # cache-aware: keep the first 4096 tokens byte-identical (prompt-cache safe)
 python -m agent_squeeze.cli squeeze transcript.jsonl --task "..." \

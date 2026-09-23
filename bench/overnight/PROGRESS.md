@@ -422,3 +422,45 @@ request/response shapes by inspection.
 **Blocked:** nothing.
 
 **Awaiting push:** everything since the sprint started (local commits only).
+
+
+## Run 9 — 2026-09-23 01:13 PDT: `--protect-prefix` into fleet + fix CLI double-call bug
+
+**What:** `squeeze_fleet(..., protect_tokens=0, policy_fn=None)` — per-agent
+pass-2 squeeze is now cache-aware when `protect_tokens > 0` (via
+`squeeze_cache_aware`); pass-1 cross-agent exact-dedup unchanged.
+`cli fleet --protect-prefix N` and `POST /v1/squeeze-fleet`
+`{"protect_tokens": N}` expose it. New `agent_squeeze/test_fleet.py` (4
+tests, all pass). README fleet section documents the flag.
+
+**Bug fix (real cost saver):** `cmd_squeeze` called `squeeze_transcript`
+unconditionally *before* the `if args.protect_prefix > 0` branch — so a
+`--protect-prefix` run fired TWO full Jev passes (double paid cost, double
+latency), and a default run fired it twice too. The first unconditional call
+is removed; exactly one pass per invocation now.
+
+**Why:** the candidate queued since Run 1. Fleet sessions in long runs are
+the worst cache-killers: N agents each compacting independently rewrite N
+prefixes, paying full input price on every turn for every agent. Per-agent
+protected prefixes keep fleet sessions cache-warm the same way Run 1 did for
+single transcripts.
+
+**Numbers** (deterministic stub policy, zero paid calls — no Jev, decision
+cache and OpenRouter key untouched):
+
+| check | result |
+|---|---|
+| library: 2 agents, shared duplicate tool result, protect=100 | dedup 1 marker (pass 1 intact); per-agent first messages byte-identical; `protected_tokens` > 0; b's 600-line heartbeat 2 chunks → 1 kept (floor), a's `keepme` chunk kept |
+| library default (protect=0) | classic path unchanged, no `protected_tokens` in stats |
+| CLI `fleet --protect-prefix 100` | prefix byte-identical, `protected_tokens` > 0 in report |
+| server `/v1/squeeze-fleet` + `protect_tokens: 100` | prefix byte-identical, `protected_tokens` > 0 |
+| full suite | 35 tests pass (31 prior + 4 fleet) |
+
+**Next (candidate runs):**
+- `--protect-prefix` into the v2 context-aware pruner (`bench/pruners/jev_context_prune.py`) — protect the parsed turn prefix before the Jev passes.
+- Live-fire the PostToolUse hook in a real Claude Code session; measure how often the model acts on the excerpt vs the raw result.
+- Jev-call benchmark on synthetic_monitoring / admit corpus to verify the deterministic policies track real Jev keep/drop (batch questions, reuse `~/.agent_squeeze/decisions.sqlite` — key near cap; consider waiting for the cap reset).
+
+**Blocked:** nothing.
+
+**Awaiting push:** everything since the sprint started (local commits only).

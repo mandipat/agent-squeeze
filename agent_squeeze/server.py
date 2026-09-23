@@ -116,8 +116,10 @@ class Handler(BaseHTTPRequestHandler):
             if self.path == "/v1/squeeze-fleet":
                 raw = data.get("transcripts") or {}
                 transcripts = {k: _as_messages(v) for k, v in raw.items()}
+                protect = int(data.get("protect_tokens", 0))
                 out, report = squeeze_fleet(
-                    transcripts, data.get("task"), threshold)
+                    transcripts, data.get("task"), threshold,
+                    protect_tokens=protect)
                 return self._send(200, {"transcripts": out, "report": report})
             if self.path == "/v1/admit":
                 store = _hold_store()
