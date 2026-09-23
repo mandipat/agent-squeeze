@@ -1,0 +1,782 @@
+{
+  "summary": {
+    "sessions": 4,
+    "tool_using_turns": 24,
+    "recall_tool_turns": 0.8333,
+    "tokens_before": 54873,
+    "tokens_after": 6520,
+    "reduction_pct": 88.1,
+    "saved_usd_sonnet_input": 0.145059,
+    "gate_cost_usd": 0.002256,
+    "gate_latency_s": 20.8,
+    "net_usd": 0.142803,
+    "pays_for_itself": true
+  },
+  "sessions": [
+    {
+      "id": "real_task1",
+      "scenario": "Bug fix + test writing",
+      "n_assistant_turns": 9,
+      "n_tool_using_turns": 4,
+      "recall_all": 0.8888888888888888,
+      "recall_tool_turns": 0.75,
+      "avg_selected": 1.5555555555555556,
+      "avg_used_oracle": 0.4444444444444444,
+      "tokens_before": 12663,
+      "tokens_after": 1065,
+      "reduction_pct": 91.6,
+      "gate_cost_usd": 0.0,
+      "gate_latency_s": 0.0,
+      "per_turn": [
+        {
+          "turn": 0,
+          "selected": [
+            "Read"
+          ],
+          "n_selected": 1,
+          "used": [],
+          "n_used": 0,
+          "recall": true,
+          "tokens_before": 1407,
+          "tokens_after": 81,
+          "gate_cost_usd": 0.0,
+          "gate_latency_s": 0.0,
+          "cached": true
+        },
+        {
+          "turn": 1,
+          "selected": [
+            "Read"
+          ],
+          "n_selected": 1,
+          "used": [
+            "Read"
+          ],
+          "n_used": 1,
+          "recall": true,
+          "tokens_before": 1407,
+          "tokens_after": 81,
+          "gate_cost_usd": 0.0,
+          "gate_latency_s": 0.0,
+          "cached": true
+        },
+        {
+          "turn": 2,
+          "selected": [],
+          "n_selected": 0,
+          "used": [],
+          "n_used": 0,
+          "recall": true,
+          "tokens_before": 1407,
+          "tokens_after": 1,
+          "gate_cost_usd": 0.0,
+          "gate_latency_s": 0.0,
+          "cached": true
+        },
+        {
+          "turn": 3,
+          "selected": [
+            "Write",
+            "Edit",
+            "skill:test-runner"
+          ],
+          "n_selected": 3,
+          "used": [
+            "Edit"
+          ],
+          "n_used": 1,
+          "recall": true,
+          "tokens_before": 1407,
+          "tokens_after": 222,
+          "gate_cost_usd": 0.0,
+          "gate_latency_s": 0.0,
+          "cached": true
+        },
+        {
+          "turn": 4,
+          "selected": [
+            "Bash",
+            "skill:test-runner"
+          ],
+          "n_selected": 2,
+          "used": [],
+          "n_used": 0,
+          "recall": true,
+          "tokens_before": 1407,
+          "tokens_after": 147,
+          "gate_cost_usd": 0.0,
+          "gate_latency_s": 0.0,
+          "cached": true
+        },
+        {
+          "turn": 5,
+          "selected": [
+            "Edit",
+            "skill:test-runner"
+          ],
+          "n_selected": 2,
+          "used": [
+            "Write"
+          ],
+          "n_used": 1,
+          "recall": false,
+          "tokens_before": 1407,
+          "tokens_after": 147,
+          "gate_cost_usd": 0.0,
+          "gate_latency_s": 0.0,
+          "cached": true
+        },
+        {
+          "turn": 6,
+          "selected": [
+            "Bash",
+            "skill:test-runner"
+          ],
+          "n_selected": 2,
+          "used": [],
+          "n_used": 0,
+          "recall": true,
+          "tokens_before": 1407,
+          "tokens_after": 147,
+          "gate_cost_usd": 0.0,
+          "gate_latency_s": 0.0,
+          "cached": true
+        },
+        {
+          "turn": 7,
+          "selected": [
+            "Bash",
+            "skill:test-runner"
+          ],
+          "n_selected": 2,
+          "used": [
+            "Bash"
+          ],
+          "n_used": 1,
+          "recall": true,
+          "tokens_before": 1407,
+          "tokens_after": 147,
+          "gate_cost_usd": 0.0,
+          "gate_latency_s": 0.0,
+          "cached": true
+        },
+        {
+          "turn": 8,
+          "selected": [
+            "Bash"
+          ],
+          "n_selected": 1,
+          "used": [],
+          "n_used": 0,
+          "recall": true,
+          "tokens_before": 1407,
+          "tokens_after": 92,
+          "gate_cost_usd": 0.0,
+          "gate_latency_s": 0.0,
+          "cached": true
+        }
+      ]
+    },
+    {
+      "id": "real_task2",
+      "scenario": "Codebase exploration (read-only, long context)",
+      "n_assistant_turns": 15,
+      "n_tool_using_turns": 13,
+      "recall_all": 0.8666666666666667,
+      "recall_tool_turns": 0.8461538461538461,
+      "avg_selected": 2.7333333333333334,
+      "avg_used_oracle": 0.8666666666666667,
+      "tokens_before": 21105,
+      "tokens_after": 3272,
+      "reduction_pct": 84.5,
+      "gate_cost_usd": 0.0012941039999999997,
+      "gate_latency_s": 10.4,
+      "per_turn": [
+        {
+          "turn": 0,
+          "selected": [
+            "Read",
+            "Bash",
+            "Glob",
+            "Grep",
+            "LS"
+          ],
+          "n_selected": 5,
+          "used": [],
+          "n_used": 0,
+          "recall": true,
+          "tokens_before": 1407,
+          "tokens_after": 392,
+          "gate_cost_usd": 6.7284e-05,
+          "gate_latency_s": 0.57,
+          "cached": false
+        },
+        {
+          "turn": 1,
+          "selected": [
+            "Read",
+            "Bash",
+            "Glob",
+            "LS"
+          ],
+          "n_selected": 4,
+          "used": [
+            "Task"
+          ],
+          "n_used": 1,
+          "recall": false,
+          "tokens_before": 1407,
+          "tokens_after": 298,
+          "gate_cost_usd": 6.8334e-05,
+          "gate_latency_s": 0.66,
+          "cached": false
+        },
+        {
+          "turn": 3,
+          "selected": [
+            "Read",
+            "Bash",
+            "Glob",
+            "LS"
+          ],
+          "n_selected": 4,
+          "used": [
+            "Bash"
+          ],
+          "n_used": 1,
+          "recall": true,
+          "tokens_before": 1407,
+          "tokens_after": 298,
+          "gate_cost_usd": 8.1018e-05,
+          "gate_latency_s": 0.75,
+          "cached": false
+        },
+        {
+          "turn": 4,
+          "selected": [
+            "Read",
+            "Bash",
+            "LS"
+          ],
+          "n_selected": 3,
+          "used": [
+            "Read"
+          ],
+          "n_used": 1,
+          "recall": true,
+          "tokens_before": 1407,
+          "tokens_after": 234,
+          "gate_cost_usd": 7.6314e-05,
+          "gate_latency_s": 0.66,
+          "cached": false
+        },
+        {
+          "turn": 5,
+          "selected": [
+            "Read",
+            "Bash",
+            "Grep",
+            "LS"
+          ],
+          "n_selected": 4,
+          "used": [
+            "Read"
+          ],
+          "n_used": 1,
+          "recall": true,
+          "tokens_before": 1407,
+          "tokens_after": 328,
+          "gate_cost_usd": 7.8498e-05,
+          "gate_latency_s": 0.73,
+          "cached": false
+        },
+        {
+          "turn": 6,
+          "selected": [
+            "Read",
+            "Bash"
+          ],
+          "n_selected": 2,
+          "used": [
+            "Read"
+          ],
+          "n_used": 1,
+          "recall": true,
+          "tokens_before": 1407,
+          "tokens_after": 170,
+          "gate_cost_usd": 8.127e-05,
+          "gate_latency_s": 0.85,
+          "cached": false
+        },
+        {
+          "turn": 7,
+          "selected": [
+            "Read",
+            "Bash",
+            "Grep",
+            "LS"
+          ],
+          "n_selected": 4,
+          "used": [
+            "Read"
+          ],
+          "n_used": 1,
+          "recall": true,
+          "tokens_before": 1407,
+          "tokens_after": 328,
+          "gate_cost_usd": 8.4168e-05,
+          "gate_latency_s": 0.7,
+          "cached": false
+        },
+        {
+          "turn": 8,
+          "selected": [
+            "Read",
+            "Bash",
+            "Grep",
+            "LS"
+          ],
+          "n_selected": 4,
+          "used": [
+            "Read"
+          ],
+          "n_used": 1,
+          "recall": true,
+          "tokens_before": 1407,
+          "tokens_after": 328,
+          "gate_cost_usd": 8.5554e-05,
+          "gate_latency_s": 0.53,
+          "cached": false
+        },
+        {
+          "turn": 9,
+          "selected": [
+            "Read",
+            "Bash",
+            "Grep",
+            "LS"
+          ],
+          "n_selected": 4,
+          "used": [
+            "Read"
+          ],
+          "n_used": 1,
+          "recall": true,
+          "tokens_before": 1407,
+          "tokens_after": 328,
+          "gate_cost_usd": 8.7402e-05,
+          "gate_latency_s": 0.63,
+          "cached": false
+        },
+        {
+          "turn": 10,
+          "selected": [
+            "Read",
+            "Bash",
+            "LS"
+          ],
+          "n_selected": 3,
+          "used": [
+            "Read"
+          ],
+          "n_used": 1,
+          "recall": true,
+          "tokens_before": 1407,
+          "tokens_after": 234,
+          "gate_cost_usd": 9.0132e-05,
+          "gate_latency_s": 0.71,
+          "cached": false
+        },
+        {
+          "turn": 11,
+          "selected": [
+            "Read",
+            "Bash"
+          ],
+          "n_selected": 2,
+          "used": [
+            "Read"
+          ],
+          "n_used": 1,
+          "recall": true,
+          "tokens_before": 1407,
+          "tokens_after": 170,
+          "gate_cost_usd": 9.2652e-05,
+          "gate_latency_s": 0.84,
+          "cached": false
+        },
+        {
+          "turn": 12,
+          "selected": [
+            "Read"
+          ],
+          "n_selected": 1,
+          "used": [
+            "Read"
+          ],
+          "n_used": 1,
+          "recall": true,
+          "tokens_before": 1407,
+          "tokens_after": 81,
+          "gate_cost_usd": 9.7146e-05,
+          "gate_latency_s": 0.57,
+          "cached": false
+        },
+        {
+          "turn": 13,
+          "selected": [],
+          "n_selected": 0,
+          "used": [
+            "Read"
+          ],
+          "n_used": 1,
+          "recall": false,
+          "tokens_before": 1407,
+          "tokens_after": 1,
+          "gate_cost_usd": 9.7902e-05,
+          "gate_latency_s": 0.74,
+          "cached": false
+        },
+        {
+          "turn": 14,
+          "selected": [
+            "Read"
+          ],
+          "n_selected": 1,
+          "used": [
+            "Read"
+          ],
+          "n_used": 1,
+          "recall": true,
+          "tokens_before": 1407,
+          "tokens_after": 81,
+          "gate_cost_usd": 0.00010101,
+          "gate_latency_s": 0.72,
+          "cached": false
+        },
+        {
+          "turn": 15,
+          "selected": [],
+          "n_selected": 0,
+          "used": [],
+          "n_used": 0,
+          "recall": true,
+          "tokens_before": 1407,
+          "tokens_after": 1,
+          "gate_cost_usd": 0.00010542,
+          "gate_latency_s": 0.71,
+          "cached": false
+        }
+      ]
+    },
+    {
+      "id": "real_task3",
+      "scenario": "Multi-file change (CLI + helper + README)",
+      "n_assistant_turns": 8,
+      "n_tool_using_turns": 4,
+      "recall_all": 0.875,
+      "recall_tool_turns": 0.75,
+      "avg_selected": 1.375,
+      "avg_used_oracle": 0.5,
+      "tokens_before": 11256,
+      "tokens_after": 950,
+      "reduction_pct": 91.6,
+      "gate_cost_usd": 0.000520968,
+      "gate_latency_s": 5.9,
+      "per_turn": [
+        {
+          "turn": 0,
+          "selected": [
+            "Bash",
+            "LS"
+          ],
+          "n_selected": 2,
+          "used": [],
+          "n_used": 0,
+          "recall": true,
+          "tokens_before": 1407,
+          "tokens_after": 156,
+          "gate_cost_usd": 5.8044e-05,
+          "gate_latency_s": 0.73,
+          "cached": false
+        },
+        {
+          "turn": 1,
+          "selected": [
+            "Write",
+            "Bash"
+          ],
+          "n_selected": 2,
+          "used": [
+            "Write"
+          ],
+          "n_used": 1,
+          "recall": true,
+          "tokens_before": 1407,
+          "tokens_after": 167,
+          "gate_cost_usd": 5.901e-05,
+          "gate_latency_s": 0.69,
+          "cached": false
+        },
+        {
+          "turn": 2,
+          "selected": [
+            "Bash"
+          ],
+          "n_selected": 1,
+          "used": [
+            "Write"
+          ],
+          "n_used": 1,
+          "recall": false,
+          "tokens_before": 1407,
+          "tokens_after": 92,
+          "gate_cost_usd": 6.4554e-05,
+          "gate_latency_s": 0.87,
+          "cached": false
+        },
+        {
+          "turn": 3,
+          "selected": [
+            "Bash"
+          ],
+          "n_selected": 1,
+          "used": [],
+          "n_used": 0,
+          "recall": true,
+          "tokens_before": 1407,
+          "tokens_after": 92,
+          "gate_cost_usd": 6.7074e-05,
+          "gate_latency_s": 0.89,
+          "cached": false
+        },
+        {
+          "turn": 4,
+          "selected": [
+            "Write",
+            "Bash"
+          ],
+          "n_selected": 2,
+          "used": [
+            "Write"
+          ],
+          "n_used": 1,
+          "recall": true,
+          "tokens_before": 1407,
+          "tokens_after": 167,
+          "gate_cost_usd": 6.468e-05,
+          "gate_latency_s": 0.59,
+          "cached": false
+        },
+        {
+          "turn": 5,
+          "selected": [
+            "Bash"
+          ],
+          "n_selected": 1,
+          "used": [],
+          "n_used": 0,
+          "recall": true,
+          "tokens_before": 1407,
+          "tokens_after": 92,
+          "gate_cost_usd": 7.035e-05,
+          "gate_latency_s": 0.86,
+          "cached": false
+        },
+        {
+          "turn": 6,
+          "selected": [
+            "Bash"
+          ],
+          "n_selected": 1,
+          "used": [
+            "Bash"
+          ],
+          "n_used": 1,
+          "recall": true,
+          "tokens_before": 1407,
+          "tokens_after": 92,
+          "gate_cost_usd": 6.7788e-05,
+          "gate_latency_s": 0.77,
+          "cached": false
+        },
+        {
+          "turn": 7,
+          "selected": [
+            "Bash"
+          ],
+          "n_selected": 1,
+          "used": [],
+          "n_used": 0,
+          "recall": true,
+          "tokens_before": 1407,
+          "tokens_after": 92,
+          "gate_cost_usd": 6.9468e-05,
+          "gate_latency_s": 0.54,
+          "cached": false
+        }
+      ]
+    },
+    {
+      "id": "real_task4",
+      "scenario": "Test writing (pytest for scratch module)",
+      "n_assistant_turns": 7,
+      "n_tool_using_turns": 3,
+      "recall_all": 1.0,
+      "recall_tool_turns": 1.0,
+      "avg_selected": 2.2857142857142856,
+      "avg_used_oracle": 0.42857142857142855,
+      "tokens_before": 9849,
+      "tokens_after": 1233,
+      "reduction_pct": 87.5,
+      "gate_cost_usd": 0.00044074800000000003,
+      "gate_latency_s": 4.5,
+      "per_turn": [
+        {
+          "turn": 0,
+          "selected": [
+            "Read",
+            "Bash",
+            "Glob",
+            "Grep",
+            "skill:test-runner"
+          ],
+          "n_selected": 5,
+          "used": [],
+          "n_used": 0,
+          "recall": true,
+          "tokens_before": 1407,
+          "tokens_after": 383,
+          "gate_cost_usd": 5.8086e-05,
+          "gate_latency_s": 0.65,
+          "cached": false
+        },
+        {
+          "turn": 1,
+          "selected": [
+            "Read"
+          ],
+          "n_selected": 1,
+          "used": [
+            "Read"
+          ],
+          "n_used": 1,
+          "recall": true,
+          "tokens_before": 1407,
+          "tokens_after": 81,
+          "gate_cost_usd": 5.9136e-05,
+          "gate_latency_s": 0.68,
+          "cached": false
+        },
+        {
+          "turn": 2,
+          "selected": [
+            "Bash",
+            "Glob",
+            "Grep",
+            "skill:test-runner"
+          ],
+          "n_selected": 4,
+          "used": [],
+          "n_used": 0,
+          "recall": true,
+          "tokens_before": 1407,
+          "tokens_after": 305,
+          "gate_cost_usd": 6.3126e-05,
+          "gate_latency_s": 0.67,
+          "cached": false
+        },
+        {
+          "turn": 3,
+          "selected": [
+            "Write"
+          ],
+          "n_selected": 1,
+          "used": [
+            "Write"
+          ],
+          "n_used": 1,
+          "recall": true,
+          "tokens_before": 1407,
+          "tokens_after": 78,
+          "gate_cost_usd": 6.1698e-05,
+          "gate_latency_s": 0.62,
+          "cached": false
+        },
+        {
+          "turn": 4,
+          "selected": [
+            "Bash",
+            "skill:test-runner"
+          ],
+          "n_selected": 2,
+          "used": [],
+          "n_used": 0,
+          "recall": true,
+          "tokens_before": 1407,
+          "tokens_after": 147,
+          "gate_cost_usd": 6.741e-05,
+          "gate_latency_s": 0.57,
+          "cached": false
+        },
+        {
+          "turn": 5,
+          "selected": [
+            "Bash",
+            "skill:test-runner"
+          ],
+          "n_selected": 2,
+          "used": [
+            "Bash"
+          ],
+          "n_used": 1,
+          "recall": true,
+          "tokens_before": 1407,
+          "tokens_after": 147,
+          "gate_cost_usd": 6.4512e-05,
+          "gate_latency_s": 0.67,
+          "cached": false
+        },
+        {
+          "turn": 6,
+          "selected": [
+            "Bash"
+          ],
+          "n_selected": 1,
+          "used": [],
+          "n_used": 0,
+          "recall": true,
+          "tokens_before": 1407,
+          "tokens_after": 92,
+          "gate_cost_usd": 6.678e-05,
+          "gate_latency_s": 0.68,
+          "cached": false
+        }
+      ]
+    }
+  ],
+  "catalog": [
+    "Read",
+    "Write",
+    "Edit",
+    "Bash",
+    "BashOutput",
+    "KillShell",
+    "Glob",
+    "Grep",
+    "LS",
+    "TodoWrite",
+    "WebFetch",
+    "WebSearch",
+    "Task",
+    "NotebookRead",
+    "NotebookEdit",
+    "mcp__github__create_issue",
+    "mcp__filesystem__search",
+    "skill:code-review",
+    "skill:test-runner",
+    "skill:doc-writer"
+  ],
+  "sonnet_input_usd_per_mtok": 3.0,
+  "prompt_version": "toolgate-v1"
+}
