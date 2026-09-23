@@ -37,8 +37,11 @@ This is the living plan. Every item ends in a benchmark number, not a vibe.
       same two-line wrap API.
 - [ ] **Proactive compaction hook.** Claude Code hook that squeezes at
       60% context instead of waiting for the transcript to be handed over.
-- [ ] **Public benchmark harness.** One command that replays the whole
+- [x] **Public benchmark harness.** One command that replays the whole
       paper: `agent-squeeze bench --all`. Anyone can verify, anyone can beat.
+      (done: Run 27 — `agent_squeeze/bench_harness.py` + `cli bench`; 13
+      offline benches with deterministic judges, live Jev bench registered
+      but skipped unless `--include-keyed`; `-o` writes JSON for CI.)
 
 ## Phase 5 — Research bets
 - [ ] **Primacy-bias study.** The Laya joint-context finding deserves its own

@@ -164,6 +164,30 @@ def cmd_ttl(args):
     print(verdict)
 
 
+def cmd_bench(args):
+    from agent_squeeze import bench_harness as bh
+    if args.list:
+        for name in bh.list_benches():
+            print(name)
+        return
+    names = args.name or (bh.list_benches() if args.all else bh.list_benches())
+    results = bh.run_all(names=names, timeout_s=args.timeout,
+                         include_keyed=args.include_keyed)
+    passed = sum(1 for r in results if r["status"] == "pass")
+    total_s = sum(r.get("seconds", 0) for r in results)
+    for r in results:
+        tail = " | ".join(r["tail"]) if r.get("tail") else r.get("reason", "")
+        print(f"{r['status']:>7} {r['seconds'] if r.get('seconds') is not None else '-':>6} "
+              f"{r['name']:>20}  {tail[:110]}")
+    print(f"{passed}/{len(results)} benches passed in {total_s:.1f}s "
+          f"(live Jev skipped unless --include-keyed)")
+    if args.output:
+        json.dump({"results": results,
+                   "summary": {"passed": passed, "total": len(results),
+                               "seconds": round(total_s, 1)}},
+                  open(args.output, "w"), indent=2)
+
+
 def main():
     ap = argparse.ArgumentParser(prog="agent_squeeze")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -227,9 +251,23 @@ def main():
                    help="base model price $/MTok input (Sonnet-class: 3.0)")
     t.add_argument("-o", "--output", required=False, default=None,
                    help="write the full recommendation JSON here")
+    b = sub.add_parser("bench", help="run the offline benchmark suite")
+    b.add_argument("--all", action="store_true",
+                   help="run every registered bench (default)")
+    b.add_argument("--list", action="store_true", help="list benches and exit")
+    b.add_argument("--name", action="append", default=None,
+                   help="run only this bench (repeatable)")
+    b.add_argument("--include-keyed", action="store_true",
+                   help="also run benches that need OPENROUTER_API_KEY "
+                        "(live Jev; off by default)")
+    b.add_argument("--timeout", type=int, default=300,
+                   help="per-bench timeout in seconds")
+    b.add_argument("-o", "--output", required=False, default=None,
+                   help="write full results JSON here")
     args = ap.parse_args()
     {"squeeze": cmd_squeeze, "fleet": cmd_fleet, "admit": cmd_admit,
-     "admit-readmit": cmd_admit_readmit, "squeeze-ttl": cmd_ttl}[args.cmd](args)
+     "admit-readmit": cmd_admit_readmit, "squeeze-ttl": cmd_ttl,
+     "bench": cmd_bench}[args.cmd](args)
 
 
 if __name__ == "__main__":

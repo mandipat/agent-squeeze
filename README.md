@@ -13,6 +13,12 @@ git clone https://github.com/mandipat/agent-squeeze && cd agent-squeeze
 python quickstart/run.py        # free policy: 12,144 -> 3,225 tokens, both needles survive
 ```
 
+Replay the published benchmarks yourself (all offline, deterministic — $0):
+
+```bash
+PYTHONPATH=. python -m agent_squeeze.cli bench --all   # 13 benches; -o results.json for CI
+```
+
 With a key, run the service and point your agents at it:
 
 ```bash

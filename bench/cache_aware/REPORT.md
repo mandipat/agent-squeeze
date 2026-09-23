@@ -4,9 +4,9 @@ Deterministic boilerplate policy (dedup + noise), no Jev calls. protect_tokens=1
 
 | input | before | naive after | naive −% | aware after | aware −% | stable prefix | next-turn naive $ | next-turn aware $ | saving | 10-turn naive $ | 10-turn aware $ | 10-turn saving |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| sre_incident.json | 7942 | 7943 | -0.01% | 7943 | -0.01% | 80 | 0.0238 | 0.0236 | 0.91% | 0.2383 | 0.2364 | 0.78% |
+| sre_incident.json | 7942 | 7942 | 0.0% | 7942 | 0.0% | 7942 | 0.0238 | 0.0024 | 90.0% | 0.2383 | 0.0536 | 77.5% |
 | mixed_grind.json | 28703 | 28703 | 0.0% | 28703 | 0.0% | 28703 | 0.0861 | 0.0086 | 90.0% | 0.8611 | 0.1937 | 77.5% |
-| github_triage.json | 7788 | 7788 | 0.0% | 7788 | 0.0% | 57 | 0.0234 | 0.0232 | 0.66% | 0.2336 | 0.2323 | 0.57% |
+| github_triage.json | 7788 | 7788 | 0.0% | 7788 | 0.0% | 7788 | 0.0234 | 0.0023 | 90.0% | 0.2336 | 0.0526 | 77.5% |
 | synthetic_monitoring.json | 101052 | 86688 | 14.21% | 86940 | 13.97% | 2381 | 0.2601 | 0.2544 | 2.46% | 2.6082 | 2.5528 | 2.12% |
 
 ## takeaway
