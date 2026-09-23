@@ -72,6 +72,53 @@ def test_stable_prefix_counts_leading_only():
     print("stable_prefix_tokens: leading-only. OK")
 
 
+def _mk_error_tail():
+    # error-dense tool result: sparse signal line inside a sea of noise
+    noise = ("pytest test_x.py::test_case PASSED\n"
+             "frame 0x7f: line 42 in module main\n") * 400  # ~24k chars
+    signal = "AssertionError: expected 200 but got 500\n"
+    return [
+        {"role": "system", "content": "sys"},
+        {"role": "user", "content": "debug the failure"},
+        {"role": "assistant", "content": "[tool call: Bash]"},
+        {"role": "tool", "name": "Bash",
+         "content": noise + signal + noise},
+    ]
+
+
+def test_two_tier_finer_chunks_on_error_dense_tail():
+    from agent_squeeze.squeeze import _is_error_dense
+    msgs = _mk_error_tail()
+    assert _is_error_dense(msgs[3]["content"]), "fixture must be error-dense"
+    keep_all = lambda chunks, task: ([1.0] * len(chunks), 0.0)
+    _, st_single = squeeze_cache_aware(msgs, "t", protect_tokens=10,
+                                       policy_fn=keep_all, two_tier=False)
+    _, st_two = squeeze_cache_aware(msgs, "t", protect_tokens=10,
+                                    policy_fn=keep_all, two_tier=True)
+    assert st_two["chunks_total"] > st_single["chunks_total"], \
+        f"two-tier must chunk finer: {st_two['chunks_total']} vs {st_single['chunks_total']}"  # noqa: E501
+    # keep-all policy keeps everything; byte-identical output both modes
+    print(f"squeeze_cache_aware two-tier: {st_single['chunks_total']} -> "
+          f"{st_two['chunks_total']} chunks on error-dense tail. OK")
+
+
+def test_two_tier_prefix_still_cache_safe_and_recall_intact():
+    msgs = _mk_error_tail()
+    needle = "expected 200 but got 500"
+    policy = lambda chunks, task: (
+        [0.95 if needle in c else 0.05 for c in chunks], 0.0)
+    for mode in (False, True):
+        out, _ = squeeze_cache_aware(msgs, "t", protect_tokens=10,
+                                     policy_fn=policy, two_tier=mode)
+        pre, _ = split_protected(msgs, 10)
+        for a, b in zip(pre, out):
+            assert a["content"] == b["content"], \
+                f"prefix must be byte-identical (two_tier={mode})"
+        blob = "".join(m.get("content", "") for m in out)
+        assert needle in blob, f"needle lost in two_tier={mode}"
+    print("squeeze_cache_aware two-tier: prefix cache-safe, needle kept. OK")
+
+
 def test_breakpoints_and_injection():
     msgs = mk_msgs()
     bps = cache_breakpoints(msgs, 200)
@@ -110,5 +157,7 @@ if __name__ == "__main__":
     test_fail_safe_keeps_best_chunk()
     test_stable_prefix_counts_leading_only()
     test_breakpoints_and_injection()
+    test_two_tier_finer_chunks_on_error_dense_tail()
+    test_two_tier_prefix_still_cache_safe_and_recall_intact()
     test_cost_models()
     print("ALL CACHE TESTS PASSED")

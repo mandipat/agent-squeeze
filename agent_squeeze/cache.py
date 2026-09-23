@@ -16,7 +16,8 @@ the dynamic tail. The next API call then reads the protected prefix from cache
 """
 from . import jev
 from .messages import estimate_tokens
-from .squeeze import CHUNK_CHARS, KEEP_THRESHOLD, chunk_text
+from .squeeze import (CHUNK_CHARS, ERROR_CHUNK_CHARS, KEEP_THRESHOLD,
+                      _is_error_dense, chunk_text)
 
 # Anthropic pricing ratios used by the offline cost model below.
 CACHE_READ_RATIO = 0.1    # cache reads cost 0.1x of base input
@@ -39,15 +40,22 @@ def split_protected(messages, protect_tokens):
 
 
 def squeeze_with_policy(messages, task, policy_fn,
-                        threshold=KEEP_THRESHOLD):
+                        threshold=KEEP_THRESHOLD, two_tier=True):
     """Same conservative chunk/keep logic as squeeze.squeeze_transcript, but
     keep/drop decisions come from `policy_fn(chunk_texts, task) -> probs`
     instead of Jev. Used for offline benchmarks; swap in jev.score_chunks
-    for production."""
+    for production.
+
+    two_tier: error-dense tool results are chunked at ERROR_CHUNK_CHARS
+    (mirrors squeeze.squeeze_transcript); False keeps the legacy
+    single-tier CHUNK_CHARS chunking."""
     tool_idx = [i for i, m in enumerate(messages) if m.get("role") == "tool"]
     chunks = []
     for pos in tool_idx:
-        for c in chunk_text(messages[pos].get("content", "")):
+        content = messages[pos].get("content", "")
+        size = (ERROR_CHUNK_CHARS
+                if two_tier and _is_error_dense(content) else CHUNK_CHARS)
+        for c in chunk_text(content, size):
             chunks.append((pos, c))
 
     if chunks:
@@ -83,14 +91,17 @@ def squeeze_with_policy(messages, task, policy_fn,
 
 
 def squeeze_cache_aware(messages, task, protect_tokens=1024,
-                        policy_fn=None, threshold=KEEP_THRESHOLD):
+                        policy_fn=None, threshold=KEEP_THRESHOLD,
+                        two_tier=True):
     """Returns (new_messages, stats). The protected prefix is returned
     byte-identical; only the tail is squeezed. `policy_fn` defaults to
-    jev.score_chunks."""
+    jev.score_chunks. `two_tier` enables error-dense finer chunking on the
+    tail (mirrors squeeze.squeeze_transcript)."""
     policy = policy_fn or jev.score_chunks
     prefix, tail = split_protected(messages, protect_tokens)
     squeezed_tail, tstats = squeeze_with_policy(tail, task, policy,
-                                               threshold=threshold)
+                                               threshold=threshold,
+                                               two_tier=two_tier)
     new_messages = list(prefix) + squeezed_tail
 
     before = sum(estimate_tokens(m.get("content", "")) for m in messages)

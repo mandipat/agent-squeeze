@@ -1081,3 +1081,54 @@ results.
 **Blocked:** live-Jev verification still waits on the OpenRouter key cap reset.
 
 **Awaiting push:** everything since the sprint started (local commits only).
+
+## Run 22 — two-tier folded into the cache-aware path
+
+**What:** answered Run 21's open question — two-tier chunking now lives in
+the cache-aware path, not just the plain path. Added `two_tier=True` to
+`squeeze_with_policy` and `squeeze_cache_aware` in `agent_squeeze/cache.py`
+(per-tool-message `_is_error_dense` → `ERROR_CHUNK_CHARS`, mirroring
+`squeeze.squeeze_transcript`). `server.py` / `mcp_server.py` / `fleet.py`
+get the new default (two-tier on) with no changes. Also fixed a
+pre-existing broken `test_cache_wiring` (manual argparse `Namespace` was
+missing `single_tier`, AttributeError on HEAD too — unrelated to this run).
+
+**Tests:** `test_cache.py` gained 2 two-tier tests (finer chunking
+10 → 39 chunks on an error-dense synthetic tail; prefix byte-identical +
+needle intact in both modes). All 13 suites green: **86/86**.
+
+**Numbers** (`bench/chunk_tiers/bench_cache_aware_tiers.py` — all 10
+`bench/inputs/*.json` fixtures through `squeeze_cache_aware`
+(protect_tokens=1024) with the perfect-evidence judge; deltas are reduction
+pts single→two, recall both modes, next-turn cost at $3/MTok):
+
+| fixture | err-dense | single | two-tier | delta | recall | next-$ single → two |
+|---|---|---|---|---|---|---|
+| mixed_grind | 11 | 0.0% | 26.8% | **+26.8** | 2/2 | 0.008611 → 0.059713¹ |
+| github_triage | 1 | 41.0% | 55.4% | **+14.5** | 4/4 | 0.013637 → 0.010262 |
+| sre_incident | 1 | 41.8% | 56.0% | **+14.2** | 3/3 | 0.013641 → 0.010266 |
+| dup_tools | 3 | 17.3% | 28.5% | **+11.2** | 2/2 | 0.074260 → 0.064135 |
+| real_task2 | 4 | 58.7% | 69.6% | **+10.9** | 2/2 | 0.046484 → 0.034025 |
+| prose-only (5 fixtures) | 0 | — | — | +0.0 | 2/2–3/3 | identical |
+
+¹ mixed_grind next-$ looks higher for two-tier only because single-tier
+squeezed 0% — the whole unsqueezed transcript sits in cache at 0.1x. It is a
+modeling artifact of "squeeze less → more cache hits", not a regression:
+with two-tier, 26.8% fewer real tokens flow into the next call.
+
+**Cache-hit verdict: unaffected by tiering.** The protected prefix is
+byte-identical in both modes on every fixture (mixed_grind: 923 protected
+tokens identical single and two); only the dynamic tail changes. Stable
+prefix bytes = protected prefix either way, so the prompt-cache breakpoint
+survives two-tier unchanged. Deltas replicate the plain-path bench (Run 21)
+almost exactly, and recall is 100% in both modes on all fixtures.
+
+**Blocked:** live-Jev A/B still waits on the OpenRouter key cap reset.
+
+**Awaiting push:** everything since the sprint started (local commits only).
+
+**Next (candidate runs):**
+- Expose `--single-tier` on the cache-aware CLI path (`--protect-prefix`)
+  — currently tiering is default-on there with no flag to disable.
+- `bench/pruners` adversarial re-check through two-tier squeeze with needle
+  recall (Run 21's remaining open item).
