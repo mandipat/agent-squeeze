@@ -71,17 +71,23 @@ def chunk_text(text, max_chars=CHUNK_CHARS):
 
 
 def decide(state, questions):
-    key = os.environ.get("OPENROUTER_API_KEY")
-    if not key:
-        raise RuntimeError("OPENROUTER_API_KEY is not set in the environment")
-    body = json.dumps({"model": MODEL, "state": state, "questions": questions}).encode()
-    req = urllib.request.Request(
-        API_URL,
-        data=body,
-        headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"},
-    )
-    with urllib.request.urlopen(req, timeout=180) as r:
-        return json.load(r)
+    """Call Jev via the openrouter skill (stored credential, authd surrogate)."""
+    import subprocess
+    import tempfile
+    skill = os.path.expanduser("~/workspace/skills/openrouter/bin/or_decide.py")
+    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+        json.dump(questions, f)
+        qpath = f.name
+    try:
+        out = subprocess.run(
+            [sys.executable, skill, "--model", MODEL,
+             "--state", state, "--questions", qpath],
+            capture_output=True, text=True, timeout=300)
+    finally:
+        os.unlink(qpath)
+    if out.returncode:
+        raise RuntimeError(f"or_decide.py failed: {out.stderr[-300:]}")
+    return json.loads(out.stdout)
 
 
 def main():

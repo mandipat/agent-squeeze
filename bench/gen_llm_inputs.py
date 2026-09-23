@@ -6,7 +6,7 @@ them post-generation (retry on miss), then the standard pipeline
 (pruners/jev_prune.py + score.py) measures whether compression preserves them.
 
 Usage:
-    export OPENROUTER_API_KEY=sk-or-v1-...   # transient, never stored
+    needs the `openrouter` skill (Secure Vault credential); no raw keys
     python3 gen_llm_inputs.py --model google/gemini-2.5-flash --n 3
     # swap --model for any OpenRouter model to remove generator bias further
 
@@ -66,21 +66,17 @@ SCENARIOS = [
 ]
 
 
-def chat(model, system, user, api_key, max_tokens=12000):
-    body = json.dumps({
-        "model": model,
-        "messages": [{"role": "system", "content": system},
-                     {"role": "user", "content": user}],
-        "max_tokens": max_tokens,
-        "temperature": 0.7,
-    }).encode()
-    req = urllib.request.Request(
-        API_URL, data=body,
-        headers={"Authorization": f"Bearer {api_key}",
-                 "Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=300) as r:
-        d = json.load(r)
-    return d["choices"][0]["message"]["content"]
+def chat(model, system, user, max_tokens=6000):
+    """Generate via the openrouter skill (stored credential, authd surrogate)."""
+    import subprocess
+    skill = os.path.expanduser("~/workspace/skills/openrouter/bin/or_chat.py")
+    out = subprocess.run(
+        [sys.executable, skill, "--model", model, "--system", system,
+         "--message", user, "--max-tokens", str(max_tokens)],
+        capture_output=True, text=True, timeout=600)
+    if out.returncode:
+        raise RuntimeError(f"or_chat.py failed: {out.stderr[-300:]}")
+    return out.stdout
 
 
 def extract_messages(text):
@@ -99,9 +95,7 @@ def main():
                     help="copies per scenario (vary temperature effects)")
     args = ap.parse_args()
 
-    api_key = os.environ.get("OPENROUTER_API_KEY")
-    if not api_key:
-        sys.exit("OPENROUTER_API_KEY not set (transient use; export it, we never store it)")
+    # auth: uses the openrouter skill (stored credential via authd); no raw keys
 
     system = ("You generate realistic coding-agent transcripts for compression "
               "benchmarks. Reply with ONLY a JSON array of message objects "
@@ -119,7 +113,7 @@ def main():
             messages = None
             for attempt in range(3):
                 try:
-                    messages = extract_messages(chat(api_key and args.model, system, user, api_key))
+                    messages = extract_messages(chat(args.model, system, user, args.max_tokens))
                     blob = json.dumps(messages)
                     missing = [n for n in sc["needles"] if n not in blob]
                     if not missing:
