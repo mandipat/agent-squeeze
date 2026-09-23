@@ -95,6 +95,16 @@ reduction on all 5 (e.g. 68.0% vs 58.6% on the 41k-token exploration
 session, 91.5% vs 41.5% adversarial) with evidence recall 2/2 everywhere.
 Full numbers + caveats in `bench/context_v2/REPORT.md`.
 
+**Chunking (library):** error-dense tool results (tracebacks, pytest
+output) are chunked at 1500 chars, prose at 6000 (two-tier; `--single-tier`
+on the CLI opts out). `overlap_chars=100` on `squeeze_transcript` /
+`cache.squeeze_with_policy` adds a 100-char overlap window on hard splits
+of long single lines, so even a fragment-blind judge sees a
+boundary-straddling needle whole (+~4% judge-input chars on long-line
+payloads only, zero extra judge calls); the overlap is stripped on
+reassembly, output bytes unaffected. See
+`bench/chunk_tiers/bench_overlap.py`.
+
 ## Use
 
 ```bash

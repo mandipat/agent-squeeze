@@ -1226,3 +1226,64 @@ regression from the reassembly change.
 
 ---
 [END OF PROGRESS — keep appending below this line for future runs]
+
+## Run 25 — 2026-09-23 05:25 PDT: overlap windows on hard splits (Run 24's open experiment)
+
+**What:** answered Run 24's queued overlap-window experiment. New in
+`agent_squeeze/squeeze.py`: `OVERLAP_CHARS = 100`,
+`chunk_text_breaks_overlap(text, max_chars, overlap_chars)` (every chunk
+sitting on a hard split gets the next chunk's first `overlap_chars` chars
+appended; soft-break chunks untouched), and `_kept_parts()` — the strip
+rule that makes the overlap actually work: a kept chunk's overlap suffix
+is stripped **only when its successor chunk is also kept** (the
+successor's core then carries those bytes); when the successor is dropped,
+the overlap stays, because the judge saw it inside this chunk and kept
+this chunk. First attempt stripped unconditionally and re-cut the needle
+on reassembly — the strip rule was the real fix. `reassemble_kept` now
+accepts 2- or 3-tuples (legacy callers untouched). `squeeze_transcript`
+and `cache.squeeze_with_policy` gained `overlap_chars=0` (default off,
+byte-identical to legacy). README gained a 3-line chunking note.
+
+**Tests:** new `agent_squeeze/test_chunk_overlap.py` (8/8 pass): overlap
+only after hard splits, zero overlap on packed lines / `overlap_chars=0`
+== legacy texts, keep-all roundtrips byte-identical, dropped-successor
+keeps overlap with no duplication, legacy 2-tuples still accepted,
+squeeze + cache paths rescue the straddling needle for the fragment-blind
+judge, off-path byte-identical to legacy. Full suite: **102/102 test fns**
+green via the PYTHONPATH runner (94 prior + 8 new).
+
+**Numbers** (`bench/chunk_tiers/bench_overlap.py` — Run 24's fixture:
+4400-char single-line payload, needle SPLIT_NEEDLE_9ZQ4 swept across the
+1500 boundary; deterministic perfect-judge, zero paid calls — no Jev,
+decision cache and OpenRouter key untouched):
+
+| needle offset | perfect judge ov=0 | perfect judge ov=100 |
+|---|---|---|
+| inside chunk 0 (1470, control) | True | True |
+| straddles 1500 (1485 / 1495 / 1499) | **False** | **True** |
+| at boundary / inside chunk 1 (1500 / 1520, control) | True | True |
+
+Judge-input overhead: +200 chars (+4.3%) on the fixture — only long-line
+payloads pay it, packed prose pays nothing. Judge CALL count unchanged.
+Keep-all roundtrip through the overlap path: byte-identical (mod the
+pre-existing trailing-newline drop). Fragment-aware judge sanity: all
+True with ov=100 (at 1485 even the fragment-aware judge needed the
+overlap — only 1 needle char lands in the continuation).
+
+**Honest limit:** the overlap window is sized for needles (evidence
+strings); a needle longer than 100 chars + boundary distance still splits.
+Live-Jev A/B (does real Jev need this, or does it reason about fragments
+anyway?) still queued for the cap reset.
+
+**Next (candidate runs):**
+- CLI `--overlap-chars` flag (and MCP `squeeze_text` schema boolean) so
+  the overlap is reachable outside the library — same gap Run 23 fixed
+  for `--single-tier`.
+- Live-Jev A/B on the boundary-split fixture when the cap resets:
+  overlap on/off with real Jev keep/drop.
+- Live-fire the PostToolUse hook in a real Claude Code session; measure
+  how often the model acts on the excerpt vs the raw result.
+
+**Blocked:** live-Jev verification still waits on the OpenRouter key cap reset.
+
+**Awaiting push:** everything since the sprint started (local commits only).

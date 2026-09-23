@@ -17,7 +17,8 @@ the dynamic tail. The next API call then reads the protected prefix from cache
 from . import jev
 from .messages import estimate_tokens
 from .squeeze import (CHUNK_CHARS, ERROR_CHUNK_CHARS, KEEP_THRESHOLD,
-                      _is_error_dense, chunk_text_breaks, reassemble_kept)
+                      _is_error_dense, _kept_parts, chunk_text_breaks,
+                      chunk_text_breaks_overlap, reassemble_kept)
 
 # Anthropic pricing ratios used by the offline cost model below.
 CACHE_READ_RATIO = 0.1    # cache reads cost 0.1x of base input
@@ -40,7 +41,8 @@ def split_protected(messages, protect_tokens):
 
 
 def squeeze_with_policy(messages, task, policy_fn,
-                        threshold=KEEP_THRESHOLD, two_tier=True):
+                        threshold=KEEP_THRESHOLD, two_tier=True,
+                        overlap_chars=0):
     """Same conservative chunk/keep logic as squeeze.squeeze_transcript, but
     keep/drop decisions come from `policy_fn(chunk_texts, task) -> probs`
     instead of Jev. Used for offline benchmarks; swap in jev.score_chunks
@@ -48,33 +50,38 @@ def squeeze_with_policy(messages, task, policy_fn,
 
     two_tier: error-dense tool results are chunked at ERROR_CHUNK_CHARS
     (mirrors squeeze.squeeze_transcript); False keeps the legacy
-    single-tier CHUNK_CHARS chunking."""
+    single-tier CHUNK_CHARS chunking.
+    overlap_chars: > 0 adds an overlap window on hard-split chunks
+    (squeeze.chunk_text_breaks_overlap) so fragment-blind judges see
+    boundary-straddling needles whole; stripped on reassembly."""
     tool_idx = [i for i, m in enumerate(messages) if m.get("role") == "tool"]
-    chunks = []  # (msg_pos, chunk_text, hard_after)
+    chunks = []  # (msg_pos, chunk_text, hard_after, overlap_after)
     for pos in tool_idx:
         content = messages[pos].get("content", "")
         size = (ERROR_CHUNK_CHARS
                 if two_tier and _is_error_dense(content) else CHUNK_CHARS)
-        for c, hard in chunk_text_breaks(content, size):
-            chunks.append((pos, c, hard))
+        if overlap_chars > 0:
+            parts = chunk_text_breaks_overlap(content, size, overlap_chars)
+        else:
+            parts = [(c, hard, 0)
+                     for c, hard in chunk_text_breaks(content, size)]
+        for c, hard, ov in parts:
+            chunks.append((pos, c, hard, ov))
 
     if chunks:
-        probs, cost = policy_fn([c for _, c, _ in chunks], task)
+        probs, cost = policy_fn([c for _, c, _, _ in chunks], task)
     else:
         probs, cost = [], 0.0
 
     keep = {i for i, p in enumerate(probs) if p >= threshold}
     by_msg = {}
-    for i, (pos, _, _) in enumerate(chunks):
+    for i, (pos, _, _, _) in enumerate(chunks):
         by_msg.setdefault(pos, []).append(i)
     for pos, idxs in by_msg.items():
         if not any(i in keep for i in idxs):
             keep.add(max(idxs, key=lambda i: probs[i]))
 
-    kept_text = {pos: [] for pos in tool_idx}
-    for i in sorted(keep):
-        pos, text, hard = chunks[i]
-        kept_text[pos].append((text, hard))
+    kept_text = _kept_parts(chunks, keep, tool_idx)
 
     new_messages = []
     for pos, m in enumerate(messages):
