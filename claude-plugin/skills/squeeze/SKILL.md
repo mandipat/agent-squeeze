@@ -74,6 +74,11 @@ EOF
 the usual numbers. Same behavior locally:
 `python -m agent_squeeze.cli squeeze t.jsonl -o out.json --protect-prefix 4096`.
 
+To stop Claude Code's own compaction from nuking your cache, register
+`claude-plugin/hooks/squeeze-precompact.py` as a PreCompact hook — it squeezes
+the transcript through this endpoint before compaction and injects a verbatim
+evidence digest as `additionalContext`. Recipe: `claude-plugin/hooks/README.md`.
+
 ## Squeeze a fleet (multiple agents at once)
 
 POST `/v1/squeeze-fleet` with one entry per agent. The service first

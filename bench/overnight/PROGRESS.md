@@ -115,3 +115,43 @@ byte-identical prefix + `protected_tokens` present in stats.)
 **Blocked:** nothing.
 
 **Awaiting push:** everything since the sprint started (local commits only).
+## Run 3 — 2026-09-22 23:50 PDT: Claude Code compaction-hook recipe
+
+**What:** new `claude-plugin/hooks/` dir: `squeeze-precompact.py` (stdlib-only
+PreCompact hook), `README.md` (install recipe + settings.json snippet), and
+`test_squeeze_precompact.py` (3 tests, all pass). Linked from the skill's
+cache-aware section.
+
+**Why:** Claude Code's built-in compaction summarizes the transcript, which
+rewrites earlier messages and destroys the provider prompt cache — every
+post-compaction turn re-pays full input price, and the summary drops the
+original goal/constraints (documented failure mode, anthropics/claude-code
+#22638). PreCompact cannot block or rewrite the transcript (hook contract
+verified via jayantdevkar/claude-code-karma and jcdendrite/claude-config
+behavior docs), but it *can* return `additionalContext`. The hook POSTs the
+transcript to `/v1/squeeze-cache-aware` (protect=4096 default) and injects a
+verbatim, extractive evidence digest + stats into the post-compaction window.
+Fail-safe by design: service down / bad transcript → exit 0 silently, never
+breaks the user's session.
+
+**Numbers** (fake HTTP service, zero paid calls — Jev/service never touched):
+
+| test | result |
+|---|---|
+| digest injection (fake service, 4-line transcript) | PASS — goal, kept evidence, stats in `additionalContext`; hook requested `protect_tokens=4096` |
+| service down (nothing listening) | PASS — exit 0, stdout empty |
+| missing transcript | PASS — exit 0, stdout empty |
+| existing suites (`test_cache`, `test_cache_wiring`) | PASS — unaffected |
+
+**Next (candidate runs):**
+- Live-fire the hook against a real Claude Code session end-to-end
+  (manual `/compact`, verify the digest lands post-compaction).
+- Jev-call benchmark on synthetic_monitoring to verify the deterministic
+  policy tracks real Jev keep/drop (uses cached decisions; key near cap).
+- TypeScript SDK spike; MCP server compression recipe; `--protect-prefix`
+  into `fleet` and the v2 context-aware pruner.
+
+**Blocked:** nothing.
+
+**Awaiting push:** everything since the sprint started (local commits only).
+
