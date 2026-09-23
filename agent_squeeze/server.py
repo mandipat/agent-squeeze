@@ -18,6 +18,19 @@ Endpoints:
                            provider prompt cache keeps hitting.
     POST /v1/squeeze-fleet {"transcripts": {"a": [...], "b": [...]}, "task": "..."} ->
                            {"transcripts": {...}, "report": {...}}
+    POST /v1/admit          {"name": "bash", "text": "...", "task": "..."} ->
+                           {"decision": ..., "admitted_text": ..., "ref": ...,
+                            "held_chars": ..., "reduction_pct": ...}
+                           gate ONE tool result before it enters context.
+    POST /v1/admit-batch    {"results": [{"name": ..., "text": ...}], "task": "..."} ->
+                           {"admissions": [...], "stats": {...}}
+    POST /v1/readmit        {"ref": "⟦held:bash/0003⟧"} ->
+                           {"ref": ..., "text": ...}  (byte-identical payload)
+    POST /v1/readmit-if-mentioned {"text": "agent follow-up ..."} ->
+                           {"found": {"⟦held:bash/0003⟧": "..."}}  scan a later
+                           agent message for hold refs and return the payloads.
+    Hold refs persist in ~/.agent_squeeze/holds.json (or AGENT_SQUEEZE_HOLD_DIR)
+    so they resolve across requests and restarts.
 
 "task" is the agents' objective (not a compression instruction). Omit it and
 each agent's task is inferred from its own first user message.
@@ -30,8 +43,19 @@ from .fleet import squeeze_fleet
 from .messages import from_openai, infer_task
 from .cache import squeeze_cache_aware
 from .squeeze import squeeze_transcript
+from .admit import admit_tool_result, admit_session, PersistentHoldStore
 
 SERVICE_TOKEN = os.environ.get("AGENT_SQUEEZE_TOKEN")
+
+
+def _hold_store():
+    # built per request so tests can redirect via AGENT_SQUEEZE_HOLD_DIR
+    return PersistentHoldStore()
+
+
+def _admission_json(name, adm):
+    return {"name": name, "decision": adm.decision, "admitted_text": adm.text,
+            "ref": adm.ref, "held_chars": adm.held_chars}
 
 
 def _as_messages(value):
@@ -95,6 +119,41 @@ class Handler(BaseHTTPRequestHandler):
                 out, report = squeeze_fleet(
                     transcripts, data.get("task"), threshold)
                 return self._send(200, {"transcripts": out, "report": report})
+            if self.path == "/v1/admit":
+                store = _hold_store()
+                name = data.get("name") or "tool"
+                text = data.get("text") or ""
+                adm, _ = admit_tool_result(name, text, data.get("task") or "",
+                                          store=store)
+                pct = round(100 * (1 - len(adm.text) / len(text)), 2) \
+                    if text else 0.0
+                payload = _admission_json(name, adm)
+                payload["reduction_pct"] = pct
+                return self._send(200, payload)
+            if self.path == "/v1/admit-batch":
+                store = _hold_store()
+                results = data.get("results") or []
+                items = [{"name": r.get("name") or "tool",
+                          "text": r.get("text") or ""}
+                         for r in results]
+                admissions, stats = admit_session(
+                    items, data.get("task") or "", store=store)
+                return self._send(
+                    200, {"admissions": [
+                        _admission_json(i["name"], a)
+                        for i, a in zip(items, admissions)], "stats": stats})
+            if self.path == "/v1/readmit":
+                store = _hold_store()
+                ref = data.get("ref")
+                try:
+                    text = store.readmit(ref)
+                except KeyError:
+                    return self._send(404, {"error": "unknown ref"})
+                return self._send(200, {"ref": ref, "text": text})
+            if self.path == "/v1/readmit-if-mentioned":
+                store = _hold_store()
+                found = store.readmit_if_mentioned(data.get("text") or "")
+                return self._send(200, {"found": found})
         except RuntimeError as e:  # e.g. OPENROUTER_API_KEY missing
             return self._send(500, {"error": str(e)})
         except Exception as e:  # never leak tracebacks to clients
@@ -117,7 +176,9 @@ def main():
     server = ThreadingHTTPServer((args.host, args.port), Handler)
     print(f"agent-squeeze serving on http://{args.host}:{args.port}")
     print("endpoints: GET /health, POST /v1/squeeze, "
-          "POST /v1/squeeze-cache-aware, POST /v1/squeeze-fleet")
+          "POST /v1/squeeze-cache-aware, POST /v1/squeeze-fleet, "
+          "POST /v1/admit, POST /v1/admit-batch, POST /v1/readmit, "
+          "POST /v1/readmit-if-mentioned")
     server.serve_forever()
 
 

@@ -238,3 +238,48 @@ relevance judged fresh at write time with lossless recall.
 **Blocked:** nothing.
 
 **Awaiting push:** everything since the sprint started (local commits only).
+## Run 5 — 2026-09-23 00:25 PDT: wire admit gate into CLI + server
+
+**What:** the admit-time gate (Run 4) was library-only — now it is callable
+from the CLI and the service. New: `agent_squeeze/cli.py` `admit` subcommand
+(JSONL `{"name","text"}` → admissions JSON + stats), server endpoints
+`POST /v1/admit`, `/v1/admit-batch`, `/v1/readmit`, `/v1/readmit-if-mentioned`,
+and `PersistentHoldStore` in `admit.py` (JSON-backed, `holds.json` under
+`~/.agent_squeeze/`, `AGENT_SQUEEZE_HOLD_DIR` override; reloads on every
+`hold()` so threaded requests and process restarts share state). 5 wiring
+tests in `agent_squeeze/test_admit_wiring.py`, all pass; README "Use" and
+plugin `SKILL.md` gained admit-time sections.
+
+**Why:** a gate agents cannot call is a gate agents will not use. Batch
+endpoint matters for harness loops that emit many tool results per turn;
+persistent holds make refs issued at write time resolvable when the agent
+later references them (`readmit-if-mentioned` scans a follow-up for refs).
+
+**Numbers** (deterministic stub policy, zero paid calls — no Jev, decision
+cache untouched, OpenRouter key budget preserved):
+
+| path | decisions | reduction |
+|---|---|---|
+| CLI `admit` (3 results: 4.4k boilerplate, 3.7k unique log, 7 chars) | notice / trim / keep_full | 91.7% |
+| server `/v1/admit` single | notice | 97.8%, readmit byte-identical |
+| server `/v1/admit-batch` | keep_full×1, trim×1, notice×1 | 91.7% |
+| `/v1/readmit` unknown ref | — | 404 as designed |
+| hold persistence across store "restarts" | — | byte-identical |
+
+Full suite still green: test_admit, test_cache, test_cache_wiring,
+test_context (all pass).
+
+**Next (candidate runs):**
+- Claude Code PostToolUse hook: admit-time gate inside the tool loop
+  (results gated before they ever reach the transcript).
+- Jev-call benchmark on synthetic_monitoring / admit corpus to verify the
+  deterministic policy tracks real Jev keep/drop (batch questions, reuse
+  `~/.agent_squeeze/decisions.sqlite` — key near cap).
+- TypeScript SDK spike; MCP server compression recipe; `--protect-prefix`
+  into `fleet` and the v2 pruner.
+
+**Blocked:** nothing.
+
+**Awaiting push:** everything since the sprint started (local commits only).
+
+

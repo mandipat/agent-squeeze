@@ -19,6 +19,7 @@ from .messages import infer_task, load_any, transcript_tokens
 from .squeeze import squeeze_transcript
 from .cache import squeeze_cache_aware
 from .fleet import squeeze_fleet
+from .admit import admit_session, PersistentHoldStore
 
 
 def _save(path, payload):
@@ -64,6 +65,37 @@ def cmd_squeeze(args):
     if args.needles:
         ok = _check_needles(out, args.needles)
         sys.exit(0 if ok else 1)
+
+
+def cmd_admit(args):
+    # Input: JSONL, one {"name": ..., "text": ...} per line (a tool-result
+    # log). Each result is judged before context entry; trimmed/noticed/held
+    # payloads persist verbatim in the hold store for /v1/readmit.
+    results = []
+    with open(args.input) as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                r = json.loads(line)
+                results.append({"name": r.get("name") or "tool",
+                                "text": r.get("text") or ""})
+    store = PersistentHoldStore()
+    admissions, stats = admit_session(results, args.task or "", store=store)
+    print(f"admit: {stats['results']} results, "
+          f"{stats['input_chars']} -> {stats['admitted_chars']} chars "
+          f"({stats['reduction_pct']}% reduction), "
+          f"{stats['held_chars']} chars held, decisions={stats['decisions']}")
+    out = {"admissions": [
+        {"name": r["name"], "decision": a.decision,
+         "admitted_text": a.text, "ref": a.ref, "held_chars": a.held_chars}
+        for r, a in zip(results, admissions)], "stats": stats}
+    _save(args.output, out)
+    if args.needles:
+        blob = json.dumps(out["admissions"]).lower()
+        needles = [l.strip() for l in open(args.needles) if l.strip()]
+        lost = [n for n in needles if n.lower() not in blob]
+        print(f"needles: {len(needles) - len(lost)}/{len(needles)} survived")
+        sys.exit(0 if not lost else 1)
 
 
 def cmd_fleet(args):
@@ -114,8 +146,14 @@ def main():
     f.add_argument("--names", default=None)
     f.add_argument("--threshold", type=float, default=0.5)
     f.add_argument("--needles", default=None)
+    a = sub.add_parser("admit", help="gate tool results before context entry")
+    a.add_argument("input", help="JSONL: one {\"name\": ..., \"text\": ...} per line")
+    a.add_argument("-o", "--output", required=True)
+    a.add_argument("--task", required=False, default=None,
+                   help="the agent's OBJECTIVE (what the results are judged against).")
+    a.add_argument("--needles", default=None)
     args = ap.parse_args()
-    {"squeeze": cmd_squeeze, "fleet": cmd_fleet}[args.cmd](args)
+    {"squeeze": cmd_squeeze, "fleet": cmd_fleet, "admit": cmd_admit}[args.cmd](args)
 
 
 if __name__ == "__main__":

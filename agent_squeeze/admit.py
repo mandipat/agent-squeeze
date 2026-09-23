@@ -30,7 +30,10 @@ heuristic below when no policy is available / for tests.
 """
 from __future__ import annotations
 
+import json
+import os
 import re
+import threading
 from dataclasses import dataclass, field
 
 from . import jev
@@ -94,6 +97,58 @@ class HoldStore:
 
     def held_chars(self):
         return sum(len(t) for t in self._blobs.values())
+
+
+# Default hold dir for PersistentHoldStore (resolved lazily at
+# construction so AGENT_SQUEEZE_HOLD_DIR can be set after import).
+
+
+class PersistentHoldStore(HoldStore):
+    """HoldStore that survives restarts: blobs persist to holds.json.
+
+    The server shares one of these across requests (via `_store()` in
+    server.py, which reads AGENT_SQUEEZE_HOLD_DIR at request time so tests
+    can point it at a temp dir), so a hold ref issued to an agent can be
+    resolved by a later call to /v1/readmit.
+    """
+
+    FILENAME = "holds.json"
+
+    def __init__(self, path=None):
+        super().__init__()
+        # resolve the hold dir lazily (not at import time) so tests and
+        # harnesses can redirect via AGENT_SQUEEZE_HOLD_DIR before use.
+        hold_dir = os.path.expanduser(
+            os.environ.get("AGENT_SQUEEZE_HOLD_DIR", "~/.agent_squeeze"))
+        self._path = path or os.path.join(hold_dir, self.FILENAME)
+        self._lock = threading.Lock()
+        self._load()
+
+    def _load(self):
+        try:
+            with open(self._path) as f:
+                doc = json.load(f)
+        except (OSError, ValueError):
+            doc = {}
+        self._blobs = dict(doc.get("blobs", {}))
+        self._counter = {k: int(v) for k, v in doc.get("counter", {}).items()}
+
+    def _save(self):
+        try:
+            os.makedirs(os.path.dirname(self._path), exist_ok=True)
+            tmp = self._path + ".tmp"
+            with open(tmp, "w") as f:
+                json.dump({"blobs": self._blobs, "counter": self._counter}, f)
+            os.replace(tmp, self._path)
+        except OSError:
+            pass  # holding still works in-memory; persistence best-effort
+
+    def hold(self, name, text):
+        with self._lock:
+            self._load()  # pick up holds written by sibling requests/processes
+            ref = super().hold(name, text)
+            self._save()
+        return ref
 
 
 def _line_stats(text):

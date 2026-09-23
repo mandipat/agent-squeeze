@@ -35,7 +35,9 @@ cp -r claude-plugin ~/.claude/plugins/agent-squeeze
 
 Optional auth: set `AGENT_SQUEEZE_TOKEN` on the server; clients then send
 `Authorization: Bearer <token>`. Endpoints: `GET /health`,
-`POST /v1/squeeze`, `POST /v1/squeeze-fleet`. Stdlib only — no dependencies.
+`POST /v1/squeeze`, `POST /v1/squeeze-cache-aware`, `POST /v1/squeeze-fleet`,
+`POST /v1/admit`, `POST /v1/admit-batch`, `POST /v1/readmit`,
+`POST /v1/readmit-if-mentioned`. Stdlib only — no dependencies.
 
 ## Why not just Headroom?
 
@@ -99,7 +101,21 @@ python -m agent_squeeze.cli fleet fe.jsonl be.jsonl infra.jsonl \
 python -m agent_squeeze.cli squeeze transcript.jsonl --task "..." \
   -o squeezed.json --protect-prefix 4096
 
-# same via the HTTP service
+# admit-time: gate tool results before they enter context
+# (input JSONL: one {"name": ..., "text": ...} per line)
+python -m agent_squeeze.cli admit tool_results.jsonl --task "..." \
+  -o admitted.json
+
+# admit via the HTTP service; held payloads persist in
+# ~/.agent_squeeze/holds.json and resolve via /v1/readmit
+curl -s -X POST "$AGENT_SQUEEZE_URL/v1/admit" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "bash", "text": "...", "task": "..."}'
+curl -s -X POST "$AGENT_SQUEEZE_URL/v1/readmit" \
+  -H "Content-Type: application/json" \
+  -d '{"ref": "⟦held:bash/0003⟧"}'
+
+# cache-aware squeeze via the HTTP service
 curl -s -X POST "$AGENT_SQUEEZE_URL/v1/squeeze-cache-aware" \
   -H "Content-Type: application/json" \
   -d '{"messages": [...], "task": "...", "protect_tokens": 4096}'

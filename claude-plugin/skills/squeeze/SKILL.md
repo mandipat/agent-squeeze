@@ -95,6 +95,29 @@ curl -s -X POST "$AGENT_SQUEEZE_URL/v1/squeeze-fleet" \
 
 Response: `{"transcripts": {...}, "report": {...}}`.
 
+## Admit-time gate (judge tool results before they enter context)
+
+Retroactive pruning is risky; judging a tool result at write time is
+safer. Before appending a long tool result to context, POST it to
+`/v1/admit`. You get back a decision (`keep_full` / `trim` / `notice` /
+`hold`) and the text to admit; trimmed or held payloads persist in the
+service's hold store and come back byte-identical via `/v1/readmit`:
+
+```bash
+curl -s -X POST "$AGENT_SQUEEZE_URL/v1/admit" \
+  -H "Content-Type: application/json" \
+  ${AGENT_SQUEEZE_TOKEN:+-H "Authorization: Bearer $AGENT_SQUEEZE_TOKEN"} \
+  -d '{"name": "bash", "text": "...", "task": "..."}'
+# later, when the agent references the hold ref:
+curl -s -X POST "$AGENT_SQUEEZE_URL/v1/readmit" \
+  -H "Content-Type: application/json" \
+  -d '{"ref": "⟦held:bash/0003⟧"}'
+```
+
+`/v1/admit-batch` gates many results at once; `/v1/readmit-if-mentioned`
+scans an agent message for hold refs and returns their payloads. Errors
+always keep full text — the gate never hides a traceback.
+
 ## Rules
 
 - Never summarize during compression. The service decides keep/drop;
