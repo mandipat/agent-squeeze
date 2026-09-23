@@ -66,7 +66,7 @@ SCENARIOS = [
 ]
 
 
-def chat(model, system, user, max_tokens=6000):
+def chat(model, system, user, max_tokens=2500):
     """Generate via the openrouter skill (stored credential, authd surrogate)."""
     import subprocess
     skill = os.path.expanduser("~/workspace/skills/openrouter/bin/or_chat.py")
@@ -93,6 +93,8 @@ def main():
     ap.add_argument("--model", default="google/gemini-2.5-flash")
     ap.add_argument("--n", type=int, default=1,
                     help="copies per scenario (vary temperature effects)")
+    ap.add_argument("--max-tokens", type=int, default=2500,
+                    help="generation cap (key monthly budget is tight)")
     args = ap.parse_args()
 
     # auth: uses the openrouter skill (stored credential via authd); no raw keys
