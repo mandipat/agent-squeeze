@@ -42,7 +42,12 @@ Output JSON schema matches jev_prune.py (score.py-compatible).
 
 Usage:
     python pruners/jev_context_prune.py inputs/real_task2.json \\
-        outputs/real_task2_v2.json [--summarize]
+        outputs/real_task2_v2.json [--summarize] [--protect-prefix N]
+
+--protect-prefix N: keep the first N chars of the transcript (whole leading
+turns) byte-identical — pass 0 and pass 1 never touch them, so the next
+provider call serves that prefix from prompt cache (0.1x input price).
+Only the tail is judged. Default 0 (classic path).
 """
 import argparse
 import hashlib
@@ -238,10 +243,14 @@ def deterministic_pass(turns):
     no edit between) reads get one-line markers. Everything else — including
     merely-old or unreferenced outputs — goes to the Jev judge, because a
     planted needle looks exactly like "old and unreferenced".
+    Turns marked protected (--protect-prefix) are never touched: the prefix
+    stays byte-identical for prompt-cache reuse.
     Returns (n_replaced, chars_saved).
     """
     pairs = list(iter_tool_units(turns))
     n_replaced, chars_saved = 0, 0
+
+    protected_idx = {t.index for t in turns if getattr(t, "protected", False)}
 
     reads, writes = [], []  # (turn_idx, path, pair)
     for p in pairs:
@@ -256,6 +265,8 @@ def deterministic_pass(turns):
     for p in pairs:
         if not p.has_result or p.replacement:
             continue
+        if p.use_turn in protected_idx or p.result_turn in protected_idx:
+            continue  # protected prefix: byte-identical, never mark
         path = _file_path_of(p)
         if not (_is_read(p) and path):
             continue
@@ -322,7 +333,8 @@ def jev_pass(turns, intent, cache, summarize=False):
     future_lines = [_future_line(t) for t in turns]
     stats = {"jev_calls": 0, "jev_questions": 0,
              "pairs_kept": 0, "pairs_onelined": 0,
-             "text_kept": 0, "text_dropped": 0, "text_auto_kept": 0,
+             "pairs_protected": 0, "text_kept": 0, "text_dropped": 0,
+             "text_auto_kept": 0, "text_protected": 0,
              "gray": 0, "summarized": 0,
              "cost_usd": 0.0, "fail_safe_keeps": 0,
              "aegis_calls": 0}
@@ -353,6 +365,18 @@ def jev_pass(turns, intent, cache, summarize=False):
     for t in turns:
         if t.role == "user":
             stats["text_auto_kept"] += 1  # user questions are sacred
+            ledger.append(_ledger_line(t))
+            continue
+
+        if getattr(t, "protected", False):
+            # --protect-prefix: prefix stays byte-identical for prompt-cache
+            # reuse. No Jev questions asked on protected turns; keep
+            # everything verbatim and record in the ledger as kept.
+            for p in t.tool_pairs:
+                if p.has_result and not p.replacement:
+                    stats["pairs_protected"] += 1
+                ledger.append(_pair_ledger(p))
+            stats["text_protected"] += 1
             ledger.append(_ledger_line(t))
             continue
 
@@ -588,6 +612,37 @@ def reassemble(turns):
 
 
 # ---------------------------------------------------------------------------
+# --protect-prefix: cache-stable leading turns
+# ---------------------------------------------------------------------------
+
+def _turn_chars(t):
+    """Original char size of a turn's messages (json encoding of source)."""
+    return sum(len(json.dumps(m)) for _, m in t.source)
+
+
+def mark_protected(turns, protect_chars):
+    """Mark the largest leading turn prefix fitting in `protect_chars`.
+
+    A turn is never split (cache.py's split_protected uses the same
+    message-boundary rule). Protected turns are byte-identical in the
+    output and skipped by both pruning passes. Returns (n_protected,
+    protected_chars).
+    """
+    if protect_chars <= 0:
+        return 0, 0
+    cum, n, chars = 0, 0, 0
+    for t in turns:
+        c = _turn_chars(t)
+        if cum + c > protect_chars:
+            break
+        cum += c
+        t.protected = True
+        n += 1
+        chars += c
+    return n, chars
+
+
+# ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
 
@@ -598,6 +653,11 @@ def main():
     ap.add_argument("--summarize", action="store_true",
                     help="one-line Aegis summaries for gray-zone text turns "
                          "(default: silent drop)")
+    ap.add_argument("--protect-prefix", type=int, default=0, metavar="N",
+                    help="keep the first N chars of the transcript "
+                         "(whole leading turns) byte-identical so the next "
+                         "call serves them from prompt cache; only the "
+                         "tail is judged (default: 0 = classic path)")
     args = ap.parse_args()
 
     t0 = time.time()
@@ -608,7 +668,10 @@ def main():
     for t in turns:  # per-run flags (not part of Turn defaults)
         t.text_dropped = False
         t.summarized = ""
+        t.protected = False
     intent = doc.get("question") or task_intent(turns)
+
+    n_protected, protected_chars = mark_protected(turns, args.protect_prefix)
 
     n_replaced, _det_saved = deterministic_pass(turns)
 
@@ -648,6 +711,11 @@ def main():
             "jev_questions": jstats["jev_questions"],
             "pairs_kept": jstats["pairs_kept"],
             "pairs_onelined": jstats["pairs_onelined"],
+            "pairs_protected": jstats["pairs_protected"],
+            "text_protected": jstats["text_protected"],
+            "protect_prefix_chars": args.protect_prefix,
+            "protected_turns": n_protected,
+            "protected_chars": protected_chars,
             "text_turns_kept": jstats["text_kept"] + jstats["text_auto_kept"],
             "text_turns_dropped": jstats["text_dropped"] + jstats["gray"],
             "text_turns_summarized": jstats["summarized"],
@@ -670,8 +738,10 @@ def main():
     print(f"jev-context-v2: {len(turns)} turns, det {n_replaced}, "
           f"jev {jstats['jev_calls']} calls/{jstats['jev_questions']}q "
           f"({cache.hits} hits), pairs kept {jstats['pairs_kept']}/"
-          f"one-lined {jstats['pairs_onelined']}, text dropped "
-          f"{s['text_turns_dropped']}, {s['token_reduction_pct']:.1f}% "
+          f"one-lined {jstats['pairs_onelined']}/"
+          f"protected {jstats['pairs_protected']}, text dropped "
+          f"{s['text_turns_dropped']} (protected {jstats['text_protected']}), "
+          f"{s['token_reduction_pct']:.1f}% "
           f"reduction, ${s['cost_usd']:.6f} in {latency:.1f}s -> {args.output}")
 
 

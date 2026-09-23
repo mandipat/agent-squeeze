@@ -464,3 +464,47 @@ cache and OpenRouter key untouched):
 **Blocked:** nothing.
 
 **Awaiting push:** everything since the sprint started (local commits only).
+
+
+## Run 10 — 2026-09-23 01:35 PDT: `--protect-prefix` into the v2 pruner
+
+**What:** `bench/pruners/jev_context_prune.py` gained `--protect-prefix N`
+(chars, default 0 = classic path). `mark_protected()` marks the largest
+leading whole-turn prefix fitting N chars (a turn is never split, same
+message-boundary rule as `cache.split_protected`); protected turns skip
+`deterministic_pass` (no stale/superseded markers) and the Jev pass (no
+judge questions — pair and text decisions short-circuit to keep-verbatim
+with ledger lines), so the output prefix is byte-identical and prompt-cache
+safe. New stats: `protect_prefix_chars`, `protected_turns`,
+`protected_chars`, `pairs_protected`, `text_protected`. New
+`bench/pruners/test_jev_context_protect.py` (4 tests, all pass).
+
+**Why:** the candidate queued since Run 1. The v2 pruner rewrites early
+turns like every other compactor — the exact cache-killing behavior Run 1
+documented. Now a v2 run with `--protect-prefix` leaves a cache-stable
+prefix while the Jev judge works the tail, with fresh ledger lines recording
+the kept prefix.
+
+**Numbers** (stub judge, zero paid calls — no Jev, real decision cache
+untouched via temp `CACHE_DB` override):
+
+| check | result |
+|---|---|
+| protected turns byte-identical in output (synthetic) | PASS — first 2 turns (2 msgs + merged tool result) identical |
+| pass 0 skip: protected read NOT marked superseded | PASS — `replacement == ""` (classic path marks it SUPERSEDED) |
+| stub judge dropped everything: judge never asked about protected content | PASS — stub asserts marker absent from every question instruction |
+| tail still judged: long tail chatter dropped | PASS — `text_dropped`, jev_calls ≥ 1 |
+| real input `sre_incident.json` + `--protect-prefix 3000` (stubbed) | 1 turn / 114 chars protected, prefix byte-identical, tail judged |
+| full library suite | 5 relevant suites green; `test_admit`/`test_mcp` fail identically on pristine tree (runner invocation quirk, pre-existing) |
+
+**Next (candidate runs):**
+- Live-fire the PostToolUse hook in a real Claude Code session; measure how
+  often the model acts on the excerpt vs the raw result.
+- Jev-call benchmark on synthetic_monitoring / admit corpus to verify the
+  deterministic policies track real Jev keep/drop (batch questions, reuse
+  `~/.agent_squeeze/decisions.sqlite` — key near cap; consider waiting for
+  the cap reset).
+
+**Blocked:** nothing.
+
+**Awaiting push:** everything since the sprint started (local commits only).
