@@ -4,13 +4,31 @@ Conservative by design (proven on adversarial transcripts): a chunk is dropped
 only if Jev says p < 0.5 that it is needed, and a tool result is never emptied
 entirely. Dropped chunks leave a small marker so the agent sees structure.
 """
+import re
 import time
 
 from . import jev
 from .messages import estimate_tokens
 
 CHUNK_CHARS = 6000  # ~1500 tokens; Jev handles 64k context easily
+ERROR_CHUNK_CHARS = 1500  # two-tier: error-dense regions get finer chunks
 KEEP_THRESHOLD = 0.5
+
+# Error-dense text: stack traces, failing assertions, pytest/test output.
+# Mirrors the heuristic in context.py (_looks_like_error).
+ERROR_DENSE_RE = re.compile(
+    r"(?i)(traceback \(most recent call last\)|\berror\b|\bfailed\b|"
+    r"\bexception\b|assertionerror|^\s*(FAILED|ERROR|FAIL:)|"
+    r"\.py:\d+|raise\s+\w*error)")
+
+
+def _is_error_dense(text):
+    """True when the text carries dense error signal: per-chunk keep/drop
+    decisions pay off because the signal lines are sparse inside a sea of
+    noise (frame lines, repeated log lines, assertion reprints)."""
+    if len(text) < 2 * ERROR_CHUNK_CHARS:
+        return False  # too short to benefit from finer chunks
+    return bool(ERROR_DENSE_RE.search(text))
 
 
 def chunk_text(text, max_chars=CHUNK_CHARS):
@@ -37,13 +55,22 @@ def chunk_text(text, max_chars=CHUNK_CHARS):
     return chunks
 
 
-def squeeze_transcript(messages, task, threshold=KEEP_THRESHOLD):
+def squeeze_transcript(messages, task, threshold=KEEP_THRESHOLD, two_tier=True):
     """Returns (new_messages, stats). Only role=="tool" messages are chunked;
-    user/assistant text is always kept (it carries intent)."""
+    user/assistant text is always kept (it carries intent).
+
+    two_tier: error-dense tool results are chunked at ERROR_CHUNK_CHARS
+    (finer keep/drop granularity around sparse signal lines); everything
+    else uses CHUNK_CHARS (fewer judge calls). Set False for the legacy
+    single-tier behavior.
+    """
     tool_idx = [i for i, m in enumerate(messages) if m.get("role") == "tool"]
     chunks = []  # (msg_pos, chunk_text)
     for pos in tool_idx:
-        for c in chunk_text(messages[pos].get("content", "")):
+        content = messages[pos].get("content", "")
+        size = (ERROR_CHUNK_CHARS
+                if two_tier and _is_error_dense(content) else CHUNK_CHARS)
+        for c in chunk_text(content, size):
             chunks.append((pos, c))
 
     t = time.time()

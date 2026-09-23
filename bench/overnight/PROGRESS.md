@@ -995,3 +995,43 @@ in practice?) is pending the OpenRouter cap reset — flagged in code.
 **Blocked:** live-Jev verification still waits on the OpenRouter key cap reset.
 
 **Awaiting push:** everything since the sprint started (local commits only).
+
+## Run 20 — two-tier chunking in squeeze.py (ROADMAP Phase 3 item)
+
+**What:** error-dense tool results (tracebacks, pytest failures) are now
+chunked at 1500 chars instead of 6000; prose tool results keep the 6000-char
+chunks. Finer keep/drop granularity where the signal lines are sparse inside
+noise (frame lines, repeated log lines), fewer Jev calls where it doesn't
+matter. Detection: `_is_error_dense` heuristic (mirrors context.py's
+`_looks_like_error`, only fires on results >= 2x the small chunk so short
+errors never fragment). Default on, backwards compatible
+(`two_tier=True`), CLI flag `--single-tier` to opt out.
+
+**Numbers** (deterministic perfect-judge stub — no Jev, OpenRouter cap untouched):
+
+| mode | reduction | Jev judge calls | needle recall |
+|---|---|---|---|
+| single-tier (6000) | 47.01% | 5 | 2/2 |
+| two-tier (1500/6000) | **66.63%** | 9 | 2/2 |
+
+Reduction delta **+19.62 pts** with recall intact; cost is ~1.8x judge calls
+on the error result only (prose path byte-identical in both modes — asserted
+in tests). Fail-safe (never empty a tool result) holds in both modes.
+
+**Files:** `agent_squeeze/squeeze.py` (+ERROR_CHUNK_CHARS, +`_is_error_dense`,
+`two_tier` param), `agent_squeeze/cli.py` (`--single-tier` flag),
+`bench/chunk_tiers/bench_chunk_tiers.py`, `bench/chunk_tiers/test_chunk_tiers.py`
+(4/4 pass).
+
+**Next (candidate runs):**
+- Re-run the adversarial fixture through two-tier squeeze with the needle
+  recall check from `bench/pruners` — confirm no regression on the
+  adversarial transcript.
+- Fold two-tier into cache-aware path (`squeeze_cache_aware`) for the
+  dynamic tail; measure whether cache-hit rate changes.
+- Live-Jev A/B when the cap resets: does the finer chunking improve judge
+  accuracy on real error text, or just reduce waste?
+
+**Blocked:** live-Jev verification still waits on the OpenRouter key cap reset.
+
+**Awaiting push:** everything since the sprint started (local commits only).

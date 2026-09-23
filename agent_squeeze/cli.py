@@ -53,7 +53,8 @@ def cmd_squeeze(args):
               f"{stats['dynamic_tokens_after']} tokens; "
               f"reduction {stats['reduction_pct']}%")
     else:
-        out, stats = squeeze_transcript(messages, task, args.threshold)
+        out, stats = squeeze_transcript(messages, task, args.threshold,
+                                        two_tier=not args.single_tier)
         print(f"reduction: {stats['reduction_pct']}% "
               f"({stats['tokens_before']} -> {stats['tokens_after']} tokens), "
               f"${stats['cost_usd']:.6f} in {stats['latency_s']}s")
@@ -168,6 +169,10 @@ def main():
                    help="the agent's OBJECTIVE (not a compression instruction). "
                         "Defaults to the transcript's first user message.")
     s.add_argument("--threshold", type=float, default=0.5)
+    s.add_argument("--single-tier", action="store_true",
+                   help="disable two-tier chunking (uniform 6000-char chunks; "
+                        "default is fine 1500-char chunks for error-dense "
+                        "tool results)")
     s.add_argument("--protect-prefix", type=int, default=0,
                    help="keep the first N tokens byte-identical (prompt-cache "
                         "safe); only the tail is squeezed. 0 = off.")
