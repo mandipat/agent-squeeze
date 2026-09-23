@@ -113,7 +113,11 @@ reassembly, output bytes unaffected. See
 surface: `squeeze`/`fleet --overlap-chars 100`, the `overlap_chars` JSON key
 on `POST /v1/squeeze`, `/v1/squeeze-cache-aware`, `/v1/squeeze-fleet`
 (`single_tier: true` also accepted there), and the `overlap_chars` /
-`single_tier` args of the `squeeze_transcript` MCP tool.
+`single_tier` args of the `squeeze_transcript` MCP tool. Library callers can
+also pass `policy_fn=(chunks, task) -> (probs, cost)` to `squeeze_transcript`
+/ `squeeze_fleet` / `squeeze_cache_aware` to override the paid Jev judge
+with a free/test policy — honored on every path (default `None` = real
+TypeSafe Jev).
 
 **Tool-definition pruning (`agent_squeeze/tooldef.py`):** per-task keep/prune
 of the agent's tool list, before the turn starts. Recently-called tools are

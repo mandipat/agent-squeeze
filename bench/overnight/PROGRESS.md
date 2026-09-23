@@ -1557,3 +1557,114 @@ no Jev, decision cache and OpenRouter key untouched):
 **Blocked:** live-Jev verification still waits on the OpenRouter key cap reset.
 
 **Awaiting push:** everything since the sprint started (local commits only).
+
+## Run 32 — 2026-09-23 07:05 PDT: `allow_near_dup` surface parity (server + TS SDK)
+
+**What:** answered Run 31's queued item — near-dup collapse was reachable
+from the CLI (`--allow-near-dup`) and the library but not from the HTTP
+service or the TS SDK. Now: `POST /v1/squeeze-fleet` accepts
+`"allow_near_dup": true` (bool-coerced, default false = exact-match-only,
+autonomous behavior unchanged) in `agent_squeeze/server.py`; TS SDK
+`client.squeezeFleet(transcripts, task?, threshold?, { allowNearDup? })`
+sends `allow_near_dup` in the body (positional args unchanged —
+backwards compatible). README "Use" documents both one-liners.
+
+**Bug fixed during the run (test fallout):** `test_overlap_wiring.py`'s
+`fl` monkeypatch wrapper had a fixed `squeeze_fleet` signature, so the new
+kwarg raised TypeError → 500 on the `/v1/squeeze-fleet` test — added
+`**kw` passthrough (same fix Run 31 applied to `test_fleet.py`).
+
+**Real gap found (not fixed this run — needs a design decision):**
+`squeeze_fleet` ignores `policy_fn` on the non-protect path: pass 2 calls
+`squeeze_transcript(...)` without forwarding it (the protect path's
+`squeeze_cache_aware` does forward). Any caller injecting a free/test
+policy with `protect_tokens=0` silently hits the paid Jev endpoint
+instead. The new server test uses `protect_tokens: 100` to stay on the
+stubbed path. Fixing means adding a `policy_fn` param to
+`squeeze_transcript` — a wider contract change queued for a future run
+(and a live-fire sanity check against the real keyed path).
+
+**Numbers** (free deterministic stub policies everywhere, zero paid calls —
+no Jev, decision cache and OpenRouter key untouched):
+
+| check | result |
+|---|---|
+| new `test_neardup_server_flag` (real HTTP, stubbed jev) | `allow_near_dup: false` → `global_near_duplicates` 0; `true` → 2; needles 2/2 survive the server path |
+| TS `npm test` (stub service) | default body `allow_near_dup: false`; `{ allowNearDup: true }` → `true`; tsc strict build green |
+| full Python suite | **20/21 files green** (`test_admit.py` fails identically on pristine tree — pre-existing runner quirk since Run 10); test files: 139 fns incl. the new one |
+| `bench --all` | 14/15 pass (live Jev skipped by design), 1.8s |
+
+**Next (candidate runs):**
+- Fix the fleet non-protect `policy_fn` gap: thread `policy_fn` through
+  `squeeze_transcript` so injected policies are honored in both pass-2
+  paths (check the MCP free-policy path too — it may be affected).
+- Live-Jev A/B when the cap resets: real-Jev recall with near-dup on/off
+  on the failure fixture.
+- Multi-seed runs (ROADMAP Phase 1): needs a randomized bench first.
+- Real-session replays; LLM-judge answer-quality round.
+
+**Blocked:** live-Jev verification still waits on the OpenRouter key cap reset.
+
+**Awaiting push:** everything since the sprint started (local commits only).
+
+## Run 33 — 2026-09-23 07:20 PDT: fix the fleet non-protect `policy_fn` gap (Run 32's queued bug)
+
+**What:** answered Run 32's queued item — and it was a genuine cost bug, not
+just an API wart. `squeeze_transcript` had no `policy_fn` parameter, so
+`fleet.squeeze_fleet`'s non-protect path (protect_tokens == 0) silently
+ignored any injected policy and called the **paid** `jev.score_chunks`
+instead. Any caller passing a free/test policy with `protect_tokens=0`
+(the default) paid for Jev calls it never asked for. Fixed:
+- `squeeze.squeeze_transcript(..., policy_fn=None)` — `policy = policy_fn
+  or jev.score_chunks`, same contract as `cache.squeeze_with_policy`.
+  Backwards compatible: all existing positional callers unchanged, default
+  path still routes to real Jev (asserted).
+- `fleet.squeeze_fleet` forwards `policy_fn` on the non-protect pass-2 path;
+  fleet docstring corrected (it previously documented the gap as intended
+  behavior: "Defaults to real Jev when protect_tokens == 0").
+- MCP path checked per Run 32's note — already clean (forwards its free
+  policy into `squeeze_cache_aware`). No change needed there.
+- README chunking note: one line documenting `policy_fn` on the three
+  library entry points.
+
+**Tests:** new `agent_squeeze/test_policy_gap.py` (4/4 pass): injected
+policy honored on `squeeze_transcript` (jev patched to raise — proves the
+policy, not Jev, decides: 4 chunks → 2 kept = keepme + fail-safe one-chunk
+floor); default path still reaches Jev; the exact Run-32 gap —
+`fleet` non-protect + injected policy no longer touches Jev
+(`total_cost_usd == 0.0`, pass-1 dedup intact); fleet classic path without
+a policy still reaches Jev.
+
+**Test-infrastructure note (not a product bug):** the overnight runner
+loads all test files into ONE process, but `test_overlap_wiring.py`
+patches `jev.score_chunks` at module level without restoring — so files
+loaded after it see its fragment-blind stub, which made
+`bench/chunk_tiers/test_two_tier_beats_single_tier_with_recall` fail with
+"needle lost" in the combined run (isolated on pristine tree: both
+keyed tests fail with RuntimeError OPENROUTER_API_KEY as designed). The
+files are meant to run one-process-per-file (`python3 test_x.py`);
+re-ran the suite that way: **26 files, 147 test fns green**, only
+`test_admit.py` fails (relative-import runner quirk, pre-existing since
+Run 10, pristine-tree-identical).
+
+**Numbers** (free stub policies everywhere, zero paid calls — no Jev,
+decision cache and OpenRouter key untouched):
+
+| check | result |
+|---|---|
+| new `test_policy_gap.py` | 4/4 pass (jev patched to raise in every test) |
+| full suite, one process per file | **147 test fns green**, 1 pre-existing quirk (`test_admit.py` import) |
+| `bench --all` | 14/15 pass (live Jev skipped by design), 1.9s |
+
+**Next (candidate runs):**
+- Live-Jev A/B when the cap resets: does real Jev beat the alias-table
+  judge on recall (needs fewer aliases, catches cross-domain tools)?
+- Multi-seed runs (ROADMAP Phase 1): needs a randomized bench first.
+- Real-session replays; LLM-judge answer-quality round.
+- (Housekeeping) quarantine the module-level `jev.score_chunks` patch in
+  `test_overlap_wiring.py` (save/restore) so multi-file runners don't see
+  the leaked stub.
+
+**Blocked:** live-Jev verification still waits on the OpenRouter key cap reset.
+
+**Awaiting push:** everything since the sprint started (local commits only).

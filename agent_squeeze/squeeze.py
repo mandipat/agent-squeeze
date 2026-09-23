@@ -144,7 +144,7 @@ def _kept_parts(chunks, keep, tool_idx):
 
 
 def squeeze_transcript(messages, task, threshold=KEEP_THRESHOLD, two_tier=True,
-                       overlap_chars=0):
+                       overlap_chars=0, policy_fn=None):
     """Returns (new_messages, stats). Only role=="tool" messages are chunked;
     user/assistant text is always kept (it carries intent).
 
@@ -157,6 +157,12 @@ def squeeze_transcript(messages, task, threshold=KEEP_THRESHOLD, two_tier=True,
     see boundary-straddling needles whole. Default 0 = legacy behavior;
     OVERLAP_CHARS (100) is the recommended value. Stripped on reassembly,
     so output bytes are unaffected.
+    policy_fn: keep/drop policy (chunk_texts, task) -> (probs, cost).
+    Defaults to jev.score_chunks (TypeSafe Jev, paid). Injectable for
+    offline/test use — the same contract as cache.squeeze_with_policy, so
+    callers like fleet.squeeze_fleet honor an injected policy on BOTH
+    pass-2 paths (protect and classic) instead of silently hitting the
+    paid endpoint on the classic path.
     """
     tool_idx = [i for i, m in enumerate(messages) if m.get("role") == "tool"]
     chunks = []  # (msg_pos, chunk_text, hard_after, overlap_after)
@@ -173,8 +179,9 @@ def squeeze_transcript(messages, task, threshold=KEEP_THRESHOLD, two_tier=True,
             chunks.append((pos, c, hard, ov))
 
     t = time.time()
+    policy = policy_fn or jev.score_chunks
     if chunks:
-        probs, cost = jev.score_chunks([c for _, c, _, _ in chunks], task)
+        probs, cost = policy([c for _, c, _, _ in chunks], task)
     else:
         probs, cost = [], 0.0
     latency = time.time() - t

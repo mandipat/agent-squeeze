@@ -68,9 +68,9 @@ def squeeze_fleet(transcripts, task=None, threshold=0.5, min_dup_chars=60,
           agents. 0 = classic per-agent squeeze.
 
     policy_fn: keep/drop policy override (chunk_texts, task) -> (probs, cost).
-          Defaults to real Jev when protect_tokens == 0, and to
-          jev.score_chunks inside squeeze_cache_aware otherwise. Injectable
-          for offline use.
+          Honored on both pass-2 paths (protect > 0 and classic). Defaults to
+          real Jev (jev.score_chunks inside squeeze_transcript /
+          squeeze_cache_aware) when None. Injectable for offline use.
 
     two_tier: pass through to the per-agent squeeze — error-dense tool
           results get finer chunks (default True; False = legacy uniform
@@ -148,7 +148,8 @@ def squeeze_fleet(transcripts, task=None, threshold=0.5, min_dup_chars=60,
         else:
             out, stats = squeeze_transcript(messages, agent_task, threshold,
                                             two_tier=two_tier,
-                                            overlap_chars=overlap_chars)
+                                            overlap_chars=overlap_chars,
+                                            policy_fn=policy_fn)
         squeezed[agent_id] = out
         per_agent[agent_id] = stats
         total_cost += stats["cost_usd"]
