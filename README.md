@@ -122,6 +122,11 @@ curl -s -X POST "$AGENT_SQUEEZE_URL/v1/readmit" \
 curl -s -X POST "$AGENT_SQUEEZE_URL/v1/squeeze-cache-aware" \
   -H "Content-Type: application/json" \
   -d '{"messages": [...], "task": "...", "protect_tokens": 4096}'
+
+# MCP server (Claude Desktop / Claude Code): compression as tools, stdio
+# free deterministic policy by default; AGENT_SQUEEZE_MCP_JEV=1 for real Jev
+claude mcp add agent-squeeze -- python3 -m agent_squeeze.mcp_server
+# tools: squeeze_transcript, admit_tool_result, readmit — see bench/mcp_server/
 ```
 
 `--task` defaults to the transcript's first user message (the agent's

@@ -15,6 +15,7 @@ keywords = ["llm", "agents", "context", "compression", "claude-code", "tokens"]
 [project.scripts]
 agent-squeeze = "agent_squeeze.cli:main"
 agent-squeeze-serve = "agent_squeeze.server:main"
+agent-squeeze-mcp = "agent_squeeze.mcp_server:main"
 
 [project.urls]
 Repository = "https://github.com/mandipat/agent-squeeze"
