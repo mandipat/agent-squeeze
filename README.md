@@ -193,6 +193,22 @@ reduction for a 2,381-token byte-identical prefix; over a 10-turn session the
 protected prefix pays one cache write + cheap reads instead of full price on
 every turn ($2.55 vs $2.61 — the gap widens as the prefix grows).
 
+**Pick the TTL.** Anthropic's 5-min TTL writes at 1.25x / reads at 0.1x; the
+1-hour TTL writes at 2.0x / reads at 0.1x. Rule of thumb: default 5-min —
+switch to 1-hour when typical inter-turn gap is 5–60 min *and* the protected
+prefix is ≥ ~50k tokens. (`bench/ttl_tuning/` simulator, Run 15: 1-hour wins
+up to 77% on slow sessions; on multi-hour-idle gaps neither TTL hits, so the
+cheaper 5-min write wins again.)
+
+```bash
+agent_squeeze squeeze-ttl --gaps 30,45,1200 --prefix 200000 --dynamic 2000
+# → recommended TTL: 1hour (5min $1.5780 vs 1hour $1.3380; saves 15.2%, ...)
+```
+
+Same thing over HTTP (`POST /v1/recommend-ttl` with `turn_gaps_sec`,
+`prefix_tokens`, `dynamic_tokens`, `base_per_mtok`) or the TS SDK
+(`client.recommendTtl([30,45,1200], 200000, 2000)`).
+
 ## Demo
 
 ```bash

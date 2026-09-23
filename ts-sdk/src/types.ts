@@ -65,6 +65,16 @@ export interface ReadmitIfMentionedResult {
   found: Record<string, string>;
 }
 
+/** Prompt-cache TTL recommendation (5-min vs 1-hour Anthropic TTL). */
+export interface TtlRecommendation {
+  recommended: "5min" | "1hour";
+  cost_5min_usd: number;
+  cost_1hour_usd: number;
+  saving_pct: number;
+  hit_rate_5min: number;
+  hit_rate_1hour: number;
+}
+
 /** Error raised for non-2xx responses. */
 export class AgentSqueezeError extends Error {
   constructor(

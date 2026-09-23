@@ -136,6 +136,29 @@ def cmd_fleet(args):
         sys.exit(0 if ok else 1)
 
 
+def cmd_ttl(args):
+    """Recommend a prompt-cache TTL from a session's inter-turn gap pattern."""
+    from agent_squeeze import ttl as ttl_mod
+    gaps = [float(g.strip()) for g in args.gaps.split(",") if g.strip()]
+    if not gaps:
+        sys.exit("error: --gaps must be a non-empty comma-separated list of seconds")
+    if args.prefix < 0 or args.dynamic < 0 or args.price <= 0:
+        sys.exit("error: --prefix/--dynamic must be >= 0 and --price > 0")
+    rec = ttl_mod.recommend_ttl(gaps, args.prefix, args.dynamic, args.price)
+    verdict = (f"recommended TTL: {rec['recommended']} "
+               f"(5min ${rec['cost_5min_usd']:.4f} vs "
+               f"1hour ${rec['cost_1hour_usd']:.4f}; "
+               f"saves {rec['saving_pct']}%, "
+               f"hit rates {rec['hit_rate_5min']}/{rec['hit_rate_1hour']})")
+    if args.output:
+        json.dump({"gaps_sec": gaps, "prefix_tokens": args.prefix,
+                   "dynamic_tokens": args.dynamic,
+                   "base_per_mtok": args.price,
+                   "recommendation": rec, "verdict": verdict},
+                  open(args.output, "w"), indent=2)
+    print(verdict)
+
+
 def main():
     ap = argparse.ArgumentParser(prog="agent_squeeze")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -169,9 +192,23 @@ def main():
     r = sub.add_parser("admit-readmit",
                        help="resolve a hold ref issued by the admit gate")
     r.add_argument("ref", help="e.g. ⟦held:bash/0003⟧")
+    t = sub.add_parser("squeeze-ttl",
+                       help="recommend 5-min vs 1-hour prompt-cache TTL "
+                            "from a session's inter-turn gap pattern")
+    t.add_argument("--gaps", required=True,
+                   help="comma-separated inter-turn gaps in seconds, e.g. "
+                        "'30,45,1200' (one value per turn)")
+    t.add_argument("--prefix", type=int, required=True,
+                   help="protected prefix tokens (the cache entry)")
+    t.add_argument("--dynamic", type=int, default=0,
+                   help="dynamic tail tokens per turn (always full price)")
+    t.add_argument("--price", type=float, default=3.0,
+                   help="base model price $/MTok input (Sonnet-class: 3.0)")
+    t.add_argument("-o", "--output", required=False, default=None,
+                   help="write the full recommendation JSON here")
     args = ap.parse_args()
     {"squeeze": cmd_squeeze, "fleet": cmd_fleet, "admit": cmd_admit,
-     "admit-readmit": cmd_admit_readmit}[args.cmd](args)
+     "admit-readmit": cmd_admit_readmit, "squeeze-ttl": cmd_ttl}[args.cmd](args)
 
 
 if __name__ == "__main__":

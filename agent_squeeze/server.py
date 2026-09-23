@@ -31,6 +31,11 @@ Endpoints:
                            agent message for hold refs and return the payloads.
     Hold refs persist in ~/.agent_squeeze/holds.json (or AGENT_SQUEEZE_HOLD_DIR)
     so they resolve across requests and restarts.
+    POST /v1/recommend-ttl {"turn_gaps_sec": [30, 45], "prefix_tokens": 200000,
+                           "dynamic_tokens": 2000, "base_per_mtok": 3.0} ->
+                           {"recommended": "5min"|"1hour", "cost_5min_usd": ...,
+                            "cost_1hour_usd": ..., "saving_pct": ...,
+                            "hit_rate_5min": ..., "hit_rate_1hour": ...}
 
 "task" is the agents' objective (not a compression instruction). Omit it and
 each agent's task is inferred from its own first user message.
@@ -44,6 +49,7 @@ from .messages import from_openai, infer_task
 from .cache import squeeze_cache_aware
 from .squeeze import squeeze_transcript
 from .admit import admit_tool_result, admit_session, PersistentHoldStore
+from .ttl import recommend_ttl
 
 SERVICE_TOKEN = os.environ.get("AGENT_SQUEEZE_TOKEN")
 
@@ -156,6 +162,17 @@ class Handler(BaseHTTPRequestHandler):
                 store = _hold_store()
                 found = store.readmit_if_mentioned(data.get("text") or "")
                 return self._send(200, {"found": found})
+            if self.path == "/v1/recommend-ttl":
+                gaps = data.get("turn_gaps_sec") or data.get("gaps")
+                if not gaps or not isinstance(gaps, list):
+                    return self._send(400, {
+                        "error": "turn_gaps_sec must be a non-empty list"})
+                rec = recommend_ttl(
+                    [float(g) for g in gaps],
+                    int(data.get("prefix_tokens", 0)),
+                    int(data.get("dynamic_tokens", 0)),
+                    float(data.get("base_per_mtok", 3.0)))
+                return self._send(200, rec)
         except RuntimeError as e:  # e.g. OPENROUTER_API_KEY missing
             return self._send(500, {"error": str(e)})
         except Exception as e:  # never leak tracebacks to clients

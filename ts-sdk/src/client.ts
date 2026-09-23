@@ -8,6 +8,7 @@ import {
   ReadmitIfMentionedResult,
   ReadmitResult,
   SqueezeResult,
+  TtlRecommendation,
 } from "./types.js";
 
 /** Typed client for the agent-squeeze HTTP service. Zero runtime deps. */
@@ -99,5 +100,26 @@ export class AgentSqueezeClient {
   /** Re-admit any held results referenced by ref in `text`. */
   readmitIfMentioned(text: string): Promise<ReadmitIfMentionedResult> {
     return this.post("/v1/readmit-if-mentioned", { text });
+  }
+
+  /**
+   * Recommend a prompt-cache TTL from the session's inter-turn gap pattern.
+   * @param turnGapsSec gap in seconds before each turn (one value per turn).
+   * @param prefixTokens protected prefix tokens (the cache entry).
+   * @param dynamicTokens dynamic tail tokens per turn (always full price).
+   * @param basePerMtok base model price in $/MTok input (Sonnet-class: 3.0).
+   */
+  recommendTtl(
+    turnGapsSec: number[],
+    prefixTokens: number,
+    dynamicTokens = 0,
+    basePerMtok = 3.0,
+  ): Promise<TtlRecommendation> {
+    return this.post("/v1/recommend-ttl", {
+      turn_gaps_sec: turnGapsSec,
+      prefix_tokens: prefixTokens,
+      dynamic_tokens: dynamicTokens,
+      base_per_mtok: basePerMtok,
+    });
   }
 }

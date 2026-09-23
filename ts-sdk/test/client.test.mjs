@@ -66,6 +66,15 @@ function startStub() {
               ? { "hold:abc123": "ORIGINAL" }
               : {},
           });
+        case "/v1/recommend-ttl":
+          return json(200, {
+            recommended: data.turn_gaps_sec[0] > 300 ? "1hour" : "5min",
+            cost_5min_usd: 1.48,
+            cost_1hour_usd: 1.93,
+            saving_pct: 23.3,
+            hit_rate_5min: 1.0,
+            hit_rate_1hour: 1.0,
+          });
         default:
           return json(404, { error: "not found" });
       }
@@ -108,6 +117,12 @@ test("SDK round-trips all endpoints", async (t) => {
   assert.deepEqual(Object.keys(rim.found), ["hold:abc123"]);
   const rimNone = await client.readmitIfMentioned("nothing here");
   assert.deepEqual(rimNone.found, {});
+
+  const ttlSlow = await client.recommendTtl([600, 900], 200000, 2000, 3.0);
+  assert.equal(ttlSlow.recommended, "1hour");
+  const ttlFast = await client.recommendTtl([30, 45], 200000, 2000, 3.0);
+  assert.equal(ttlFast.recommended, "5min");
+  assert.equal(ttlSlow.saving_pct, 23.3);
 
   // auth header is sent on every call
   assert.ok(SEEN.auth.every((h) => h === "Bearer sekrit"));

@@ -766,3 +766,49 @@ is ≥ ~50k tokens.
 **Blocked:** nothing.
 
 **Awaiting push:** everything since the sprint started (local commits only).
+
+## Run 16 — 2026-09-23 03:00 PDT: wire TTL recommender into CLI + server + TS SDK
+
+**What:** the Run 15 TTL simulator is now callable from every surface:
+`agent_squeeze squeeze-ttl --gaps 30,45,1200 --prefix 200000 --dynamic 2000`
+(prints one-line verdict; `-o` writes full JSON), `POST /v1/recommend-ttl`
+(accepts `turn_gaps_sec` or legacy `gaps`, validates input → 400 on
+missing/non-list gaps), and TS SDK `client.recommendTtl(gaps, prefix,
+dynamic, basePerMtok)` with a new `TtlRecommendation` type. New
+`agent_squeeze/test_ttl_wiring.py` (6 tests, all pass): CLI recommends
+1hour for slow gaps / 5min for bursts, JSON output roundtrips, empty gaps
+rejected, server returns 1hour for [600,900] and 5min for [30,45], 400 on
+missing gaps. TS stub test now round-trips all 8 endpoints. README
+cache-aware section gained the "Pick the TTL" subsection with the rule of
+thumb and a verified CLI example.
+
+**Why:** the candidate queued at Run 15. A simulator nobody can call is a
+number nobody uses — the TTL choice is per-session operational data
+(inter-turn rhythm), so it belongs behind a one-command flag the harness or
+the developer runs at session start, not buried in a bench script.
+
+**Numbers** (pure arithmetic, zero paid calls — no Jev, decision cache and
+OpenRouter key untouched):
+
+| check | result |
+|---|---|
+| `squeeze-ttl --gaps 30,45,1200 --prefix 200000 --dynamic 2000` | 1hour (5min $1.5780 vs 1hour $1.3380; saves 15.2%, hit rates 0.333/0.667) |
+| `squeeze-ttl --gaps 600,900,1200` | 1hour (asserted); `--gaps 30,45,60` → 5min (asserted) |
+| new wiring tests | 6/6 pass |
+| full Python suite | 69 passed, 0 failed |
+| TS `tsc` strict build + `npm test` | green (8/8 endpoints round-trip) |
+
+**Next (candidate runs):**
+- MCP server: add a `recommend_ttl` tool (it exposes only the 3
+  compression tools today).
+- Live-fire the PostToolUse hook in a real Claude Code session; measure how
+  often the model acts on the excerpt vs the raw result.
+- Jev-call benchmark on synthetic_monitoring / admit corpus to verify the
+  deterministic policies track real Jev keep/drop (batch questions, reuse
+  `~/.agent_squeeze/decisions.sqlite` — key near cap; consider waiting for
+  the cap reset).
+
+**Blocked:** nothing.
+
+**Awaiting push:** everything since the sprint started (local commits only).
+
