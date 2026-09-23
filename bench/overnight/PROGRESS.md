@@ -76,6 +76,7 @@ full price on every byte, every turn.
 
 **Awaiting push:** everything since the sprint started (local commits only).
 
+
 ## Run 2 — 2026-09-22 23:45 PDT: wire cache-aware squeeze into CLI + server
 
 **What:** `--protect-prefix N` flag on `cli squeeze` (0 = classic path,
@@ -934,5 +935,63 @@ repeated menus, re-read confirmations) are where this compounds.
   the cap reset).
 
 **Blocked:** nothing.
+
+**Awaiting push:** everything since the sprint started (local commits only).
+---
+
+## Run 19 (2026-09-23 ~03:45 PDT): `--mapreduce` batch mode for the v2 Jev pruner
+
+**Fold-in from Jev usage research.** Web-research on how people actually use
+Jev surfaced the pattern that fixes v2's known 3–15x latency overhead
+(sequential Jev calls with rolling state):
+- ego-jev (github.com/ZephyrDeng/ego-jev): one System One call per DOM step,
+  "two decisions, one network round trip" — Jev answers all questions in
+  parallel in ONE request.
+- TypeSafe lists **map-reduce over large datasets** as a first-class Jev use
+  case; LangChain's `TypeSafeClassifier` batches multiple questions per call.
+- Vercel AI SDK 7 `evaluate`, Browser Use jev-ultrafast (7.1 s Flights demo).
+
+**What was built** (`bench/pruners/jev_context_prune.py --mapreduce`):
+- `jev_pass_mapreduce()`: asks EVERY unit's noul question (tool-pair windows
+  + text turns) in ONE decisions call against a static full-transcript
+  skeleton (every turn on one deterministic one-line), replacing the rolling
+  decision ledger. Same question texts, same sqlite cache keys, same
+  fail-safes (unresolved errors kept verbatim, user turns sacred,
+  text-drop never strands an error pair, dropped pairs get outcome notes).
+- Refactors to share code: `_later_success` hoisted to module level,
+  `_pass2_summarize` extracted (used by both passes).
+
+**Numbers** (deterministic stub judge — no Jev, decision cache and OpenRouter
+key untouched):
+
+| check | result |
+|---|---|
+| synthetic 8-turn fixture (3 tool pairs, 3 judged text turns) | map-reduce: **1 Jev call / 5 questions** vs sequential: **4 calls / 5 questions** |
+| decision parity (same stub answers) | identical keep/drop on every unit, identical −74.3% token reduction both modes |
+| cache rerun | 0 Jev calls, byte-identical decisions |
+| fail-safes | unresolved AssertionError kept verbatim, never reached the judge |
+| unit tests | 6/6 new (`test_jev_mapreduce.py`); existing pruners + agent_squeeze tests still green |
+
+**Honest trade-off (documented in code):** an earlier decision no longer
+informs a later one within the same pass; compensated by the static
+skeleton — every unit's outcome note is visible to every question. Live-Jev
+verification (does the static skeleton judge as well as the rolling ledger
+in practice?) is pending the OpenRouter cap reset — flagged in code.
+
+**Sources** (Jev usage research):
+- github.com/ZephyrDeng/ego-jev — one System One call per DOM step
+- firecrawl.dev/blog/what-is-jev — map-reduce, gate-in-front-of-agent
+- docs.typesafe.ai/introduction/coding-agents — where Jev fits in a coding-agent loop
+- runtimewire.com/article/langchain-adds-jev-decision-model-agent-workflows — batch classification middleware
+- lumadock.com/blog/what-is-jev-typesafe — guardrails + calibration notes
+
+**Next (candidate runs):**
+- Jev-call benchmark on synthetic_monitoring / admit corpus with the
+  `--mapreduce` flag (wait for cap reset; batch questions, reuse
+  `~/.agent_squeeze/decisions.sqlite`).
+- Live-fire the PostToolUse hook in a real Claude Code session; measure how
+  often the model acts on the excerpt vs the raw result.
+
+**Blocked:** live-Jev verification still waits on the OpenRouter key cap reset.
 
 **Awaiting push:** everything since the sprint started (local commits only).

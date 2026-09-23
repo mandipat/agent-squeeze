@@ -290,6 +290,24 @@ def deterministic_pass(turns):
 # pass 1: Jev with rolling state
 # ---------------------------------------------------------------------------
 
+def _later_success(pair, pairs):
+    """True if a later non-error call of the same tool hits the same target.
+
+    Hoisted to module level so the map-reduce pass (pass 1b) can share the
+    unresolved-error fail-safe with the sequential pass (pass 1).
+    """
+    tgt = _file_path_of(pair) or pair_target(pair)
+    for q in pairs:
+        if q is pair or not q.has_result:
+            continue
+        if q.result_turn <= pair.result_turn:
+            continue
+        if q.name == pair.name and \
+                (_file_path_of(q) or pair_target(q)) == tgt \
+                and not q.is_error:
+            return True
+    return False
+
 def _pair_ledger(pair):
     tgt = pair_target(pair)
     if pair.replacement:
@@ -327,6 +345,30 @@ def _future_line(turn):
     return f"t{turn.index} [{turn.role}]: {core[:160]}"
 
 
+def _pass2_summarize(gray_turns, stats, summarize):
+    """Gray-zone text turns (SUMMARIZE_P <= p < KEEP_P): opt-in one-line
+    Aegis summaries via ONE batched call. Shared by sequential and
+    map-reduce passes. Default (summarize=False): silent drop."""
+    if not (summarize and gray_turns):
+        return
+    total_chars = sum(len(t.text) for t in gray_turns)
+    if total_chars >= 1500:
+        summaries = aegis_summarize_batch(
+            [(t.index, t.text[:2000]) for t in gray_turns])
+        stats["aegis_calls"] = 1 if summaries else 0
+        if summaries:
+            for t, s in zip(gray_turns, summaries):
+                if s:
+                    t.text_dropped = False
+                    t.summarized = s
+                    stats["summarized"] += 1
+                    stats["gray"] -= 1
+    else:
+        print(f"  [summarize] skipped: only {total_chars} gray chars; "
+              f"a summary call would cost more than it saves",
+              file=sys.stderr)
+
+
 def jev_pass(turns, intent, cache, summarize=False):
     n = len(turns)
     ledger = []
@@ -348,17 +390,7 @@ def jev_pass(turns, intent, cache, summarize=False):
                 f"What comes LATER in the transcript:\n{fut}")
 
     def later_success(pair, pairs):
-        tgt = _file_path_of(pair) or pair_target(pair)
-        for q in pairs:
-            if q is pair or not q.has_result:
-                continue
-            if q.result_turn <= pair.result_turn:
-                continue
-            if q.name == pair.name and \
-                    (_file_path_of(q) or pair_target(q)) == tgt \
-                    and not q.is_error:
-                return True
-        return False
+        return _later_success(pair, pairs)
 
     pairs = list(iter_tool_units(turns))
 
@@ -492,25 +524,184 @@ def jev_pass(turns, intent, cache, summarize=False):
             ledger.append(f"t{t.index} [{t.role}]: text dropped")
 
     # --- pass 2: optional batched Aegis summarization of gray-zone turns ---
-    if summarize and gray_turns:
-        total_chars = sum(len(t.text) for t in gray_turns)
-        if total_chars >= 1500:
-            summaries = aegis_summarize_batch(
-                [(t.index, t.text[:2000]) for t in gray_turns])
-            stats["aegis_calls"] = 1 if summaries else 0
-            if summaries:
-                for t, s in zip(gray_turns, summaries):
-                    if s:
-                        t.text_dropped = False
-                        t.summarized = s
-                        stats["summarized"] += 1
-                        stats["gray"] -= 1
-                        ledger.append(f"t{t.index} [summary]: {s}")
-        else:
-            print(f"  [summarize] skipped: only {total_chars} gray chars; "
-                  f"a summary call would cost more than it saves",
-                  file=sys.stderr)
+    _pass2_summarize(gray_turns, stats, summarize)
     return stats
+
+
+# ---------------------------------------------------------------------------
+# pass 1b: Jev map-reduce — ONE batched call for the whole transcript
+# ---------------------------------------------------------------------------
+#
+# Sequential jev_pass walks turns in order with a rolling ledger: one Jev
+# call per tool pair / judged text turn, so latency scales with turn count
+# (the 3-15x v2 latency overhead). Map-reduce trades the rolling ledger
+# for a static full-transcript skeleton and asks every question in ONE
+# decisions call — Jev evaluates all questions in parallel in one request
+# (the ego-jev "two decisions, one network round trip" pattern; TypeSafe
+# lists map-reduce over datasets as a first-class Jev use case).
+#
+# Honest trade-off vs rolling state: an earlier decision no longer informs a
+# later one inside the same pass. Compensated by (a) the static skeleton —
+# every unit's one-line outcome note is visible to every question, and
+# (b) the same question texts and cache keys, so decisions are comparable
+# across modes and share the sqlite decision cache.
+#
+# Fail-safes are identical to pass 1: unresolved errors always kept
+# verbatim, user turns sacred, protected/prefix turns skipped, dropped
+# pairs get a one-line outcome note (never silently lost), and a text drop
+# never strands an error pair.
+#
+# Research sources: ego-jev (github.com/ZephyrDeng/ego-jev) — one System One
+# call per DOM step; firecrawl.dev/blog/what-is-jev — map-reduce + the
+# "gate in front of an agent" pattern; docs.typesafe.ai/introduction/
+# coding-agents — where Jev fits in a coding agent's loop.
+
+def jev_pass_mapreduce(turns, intent, cache, summarize=False):
+    n = len(turns)
+    stats = {"jev_calls": 0, "jev_questions": 0,
+             "pairs_kept": 0, "pairs_onelined": 0,
+             "pairs_protected": 0, "text_kept": 0, "text_dropped": 0,
+             "text_auto_kept": 0, "text_protected": 0,
+             "gray": 0, "summarized": 0,
+             "cost_usd": 0.0, "fail_safe_keeps": 0,
+             "aegis_calls": 0}
+    gray_turns = []
+    pairs = list(iter_tool_units(turns))
+
+    # Static skeleton: every turn on one deterministic line, past and
+    # future both visible (replaces the rolling decision ledger).
+    tmap = "\n".join(_future_line(t) for t in turns) or "(empty transcript)"
+    state = (f"{FRAMING}\n\nTask: {intent or '(no stated task)'}\n\n"
+             f"TRANSCRIPT MAP — one line per turn (past and future all "
+             f"visible at once; each judged unit's FULL text is inside "
+             f"its own question below):\n{tmap}")
+
+    questions = {}          # qid -> noul question
+    pair_units = []         # (pair, cache_key, [qids], outcome_note)
+    text_units = []         # (turn, cache_key, qid)
+
+    for t in turns:
+        if t.role == "user":
+            stats["text_auto_kept"] += 1  # sacred
+            continue
+        if getattr(t, "protected", False):
+            for p in t.tool_pairs:
+                if p.has_result and not p.replacement:
+                    stats["pairs_protected"] += 1
+            stats["text_protected"] += 1
+            continue
+
+        # --- tool-pair units: same questions as the sequential pass ---
+        for p in t.tool_pairs:
+            if not p.has_result or p.replacement:
+                continue  # pass 0 handled (stale/superseded markers)
+            if p.is_error and not _later_success(p, pairs):
+                stats["fail_safe_keeps"] += 1  # unresolved: ALWAYS keep
+                continue
+            key = _pair_cache_key(p)
+            cached = cache.get(key)
+            if cached is not None:
+                _apply_pair(stats, p, *cached)
+                continue
+            wins = _windows(p.result)
+            note = _outcome_note(p)
+            qids = []
+            for i, w in enumerate(wins):
+                qid = f"p{t.index}_{p.id}_w{i}"
+                questions[qid] = {
+                    "type": "noul",
+                    "instructions":
+                        f"{PAIR_RULES}\n\nTool: {p.name} "
+                        f"{pair_target(p)}\n\nOutput window "
+                        f"{i + 1}/{len(wins)}:\n{w}\n\n"
+                        f"If you answer false, the ENTIRE output "
+                        f"is replaced by this one-line note and "
+                        f"nothing else survives:\n{note}\n"
+                        f"Answer true only if the full output — "
+                        f"not just the note — is required.",
+                }
+                qids.append(qid)
+            pair_units.append((p, key, qids, note))
+
+        # --- text units: same questions and auto-keep rules as sequential ---
+        if t.index >= n - PROTECT_RECENT:
+            stats["text_auto_kept"] += 1  # live context
+            continue
+        if not t.text.strip():
+            continue
+        if len(t.text) < MIN_TURN_CHARS:
+            stats["text_auto_kept"] += 1  # judging costs more than it saves
+            continue
+        key = turn_cache_key(t, PROMPT_VERSION)
+        cached = cache.get(key)
+        if cached is not None:
+            _apply_text(stats, gray_turns, t, *cached)
+            continue
+        txt = t.text if len(t.text) <= TEXT_QUESTION_TRUNC else \
+            t.text[:TEXT_QUESTION_TRUNC] + "\n[truncated for judging]"
+        qid = f"t{t.index}"
+        questions[qid] = {
+            "type": "noul",
+            "instructions": (f"{TEXT_RULES}\n\nTurn t{t.index} text:\n{txt}\n\n"
+                             f"Answer true to keep, false to drop."),
+        }
+        text_units.append((t, key, qid))
+
+    # ONE decisions call for every uncached unit in the transcript.
+    if questions:
+        try:
+            answers, cost = jev_batch(state, questions)
+        except Exception as e:
+            print(f"  [jev mapreduce] judge failed ({e}); keeping "
+                  f"{len(pair_units)} pairs + {len(text_units)} text turns",
+                  file=sys.stderr)
+            stats["fail_safe_keeps"] += len(pair_units) + len(text_units)
+            stats["pairs_kept"] += len(pair_units)
+            stats["text_kept"] += len(text_units)
+            _pass2_summarize(gray_turns, stats, summarize)
+            return stats
+        stats["cost_usd"] += cost
+        stats["jev_calls"] += 1
+        stats["jev_questions"] += len(questions)
+        for p, key, qids, note in pair_units:
+            pmax = max(answers[q]["noul"] for q in qids)
+            keep = pmax >= KEEP_P
+            cache.put(key, keep, pmax)
+            _apply_pair(stats, p, keep, pmax)
+        for t, key, qid in text_units:
+            p = answers[qid]["noul"]
+            keep = p >= KEEP_P
+            # unresolved-error fail-safe: a drop never strands an error pair
+            if p < KEEP_P and any(q.has_result and q.is_error
+                                  and not q.replacement
+                                  for q in t.tool_pairs):
+                keep, p = True, KEEP_P
+                stats["fail_safe_keeps"] += 1
+            cache.put(key, keep, p)
+            _apply_text(stats, gray_turns, t, keep, p)
+
+    _pass2_summarize(gray_turns, stats, summarize)
+    return stats
+
+
+def _apply_pair(stats, p, keep, pmax):
+    if keep:
+        stats["pairs_kept"] += 1
+    else:
+        stats["pairs_onelined"] += 1
+        p.replacement = _outcome_note(p)
+
+
+def _apply_text(stats, gray_turns, t, keep, p):
+    if keep:
+        stats["text_kept"] += 1
+    elif p >= SUMMARIZE_P:
+        stats["gray"] += 1  # may be upgraded by pass 2, else dropped
+        gray_turns.append(t)
+        t.text_dropped = True
+    else:
+        stats["text_dropped"] += 1
+        t.text_dropped = True
 
 
 def _pair_cache_key(pair):
@@ -658,6 +849,11 @@ def main():
                          "(whole leading turns) byte-identical so the next "
                          "call serves them from prompt cache; only the "
                          "tail is judged (default: 0 = classic path)")
+    ap.add_argument("--mapreduce", action="store_true",
+                    help="one batched Jev decisions call for the whole "
+                         "transcript (static skeleton state) instead of the "
+                         "sequential rolling-state walk; far fewer Jev "
+                         "calls (default: off)")
     args = ap.parse_args()
 
     t0 = time.time()
@@ -677,7 +873,14 @@ def main():
 
     cache = DecisionCache()
     try:
-        jstats = jev_pass(turns, intent, cache, summarize=args.summarize)
+        if args.mapreduce:
+            jstats = jev_pass_mapreduce(turns, intent, cache,
+                                        summarize=args.summarize)
+            method = "jev-context-v2-mapreduce"
+        else:
+            jstats = jev_pass(turns, intent, cache,
+                              summarize=args.summarize)
+            method = "jev-context-v2"
     finally:
         cache.close()
 
@@ -696,7 +899,7 @@ def main():
     latency = time.time() - t0
     out = {
         "input_id": doc["id"],
-        "method": "jev-context-v2",
+        "method": method,
         "question": doc.get("question", ""),
         "evidence": doc.get("evidence", []),
         "expected_answer_contains": doc.get("expected_answer_contains", []),
@@ -735,7 +938,7 @@ def main():
     with open(args.output, "w") as f:
         json.dump(out, f)
     s = out["stats"]
-    print(f"jev-context-v2: {len(turns)} turns, det {n_replaced}, "
+    print(f"{method}: {len(turns)} turns, det {n_replaced}, "
           f"jev {jstats['jev_calls']} calls/{jstats['jev_questions']}q "
           f"({cache.hits} hits), pairs kept {jstats['pairs_kept']}/"
           f"one-lined {jstats['pairs_onelined']}/"
