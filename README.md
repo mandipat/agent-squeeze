@@ -132,6 +132,19 @@ out, stats = squeeze_support_thread(turns)
 print(stats["reduction_pct"], "% reduction,", "needles intact")
 EOF
 
+# voice/spoken-dialogue transcripts: collapse backchannels, fillers,
+# restated repeats and confirmation re-asks; commitments stay verbatim.
+# interrupted=True turns keep only committed_text (the barge-in rule:
+# only what the agent actually spoke enters context)
+python - <<'EOF'
+from agent_squeeze.voice import squeeze_voice_dialogue
+turns = [{"role": "agent", "text": "Booking the flight to Austin for—",
+          "interrupted": True,
+          "committed_text": "Booking the flight to Austin for"}]
+out, stats = squeeze_voice_dialogue(turns)
+print(stats["reduction_pct"], "% reduction,", "barge-in honest")
+EOF
+
 # admit via the HTTP service; held payloads persist in
 # ~/.agent_squeeze/holds.json and resolve via /v1/readmit
 curl -s -X POST "$AGENT_SQUEEZE_URL/v1/admit" \

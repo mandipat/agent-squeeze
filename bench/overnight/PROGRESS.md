@@ -858,3 +858,81 @@ key untouched):
 
 **Awaiting push:** everything since the sprint started (local commits only).
 
+
+## Run 18 — 2026-09-23 03:45 PDT: voice/conversational-agent compression (new sector)
+
+**What:** new module `agent_squeeze/voice.py` + synthetic benchmark
+`bench/voice_dialogue/run.py` + 8 unit tests (`agent_squeeze/test_voice.py`,
+all pass; full suite 77/77). Spoken-dialogue transcripts bloat differently
+from chat: ASR fillers ("um", "uh", "you know"), backchannels ("mm-hmm",
+"yeah, right"), barge-in fragments (cut-off utterances), confirmation
+re-asks ("just to confirm..."), TTS readbacks of long content, and
+silence/no-audio events. `squeeze_voice_dialogue` works turn-by-turn with
+cross-turn memory (`seen_repeats`): decisions `keep_full` (commitments,
+outcomes, corrections, short turns ≤160 chars — judging costs more than it
+saves at that size), `keep_excerpt` (verbatim fact/commitment lines from
+noisy turns, rest held via `HoldStore`, byte-identical readmit), `notice`
+(fillers, backchannels, restated repeats, confirmation re-asks, readback
+framing). Free deterministic word-set/regex policy; a real Jev `policy_fn`
+is injectable. Nothing kept is ever rewritten — the admit-gate rule.
+
+**Barge-in rule (research fold-in):** only what the agent *actually spoke*
+may enter context (voice-agent practice — logging the full unspoken
+generation is a documented hallucination-of-memory failure). A turn with
+`interrupted=True` keeps only its `committed_text`; an interrupted turn with
+nothing committed is a notice. The bench asserts the unspoken tail
+("for Friday morning") never appears in the output. Also folded in:
+restatement detection via Jaccard (near-identical rephrases) + a
+recall-style content-word coverage check (long rambles that dilute Jaccard);
+corrections ("No wait — Thursday, not Friday!") are explicitly *not*
+restatements and stay keep_full.
+
+**Numbers** (deterministic policy, zero paid calls — no Jev, decision cache
+and OpenRouter key untouched):
+
+| check | result |
+|---|---|
+| synthetic 18-turn spoken dialogue (booking intent, fillers, backchannels, barge-in, restated repeat, ramble restatement, 2 confirmation re-asks, noisy fact turn, TTS readback, commitment) | 335 → 299 tokens (−10.75%), 12 keep_full / 3 keep_excerpt / 4 notice, 3 held |
+| needle recall | 3/3 (AX-4471, 4820 Meridian Ave, Thursday 10:30 AM) |
+| barge-in honesty | PASS — unspoken tail absent from output |
+| commitment turn | keep_full verbatim (asserted) |
+| TTS readback (5-line itinerary) | keep_excerpt: only the 7:05 AM / 12:40 PM lines, framing held |
+| confirmation re-ask after fact established | notice `[confirmation re-ask; fact established earlier]` |
+| unit tests | 8/8; full suite 77/77 |
+
+**Bugs fixed during the run:** (1) backchannel/filler word-sets missed
+split tokens ("mm"/"hmm", "you"/"know") and comma combos ("Yeah, right.") —
+word-set matching replaced whole-line regexes; (2) punctuation killed
+Jaccard ("morning?" vs "morning") — tokenization now strips punctuation;
+(3) restated-repeat threshold 0.55→0.45 plus the coverage check for rambles;
+(4) dead `_tokens` helper after the `_content_words` refactor (NameError).
+
+Honest limit (documented): spoken turns are tiny, so notice/excerpt labels
+can outweigh the dropped text on short fixtures — the −10.75% is real but
+modest; the mechanism (barge-in honesty, repeat collapse, readback
+excerpting) is the claim. Long real-world calls (200+ turns of hold music,
+repeated menus, re-read confirmations) are where this compounds.
+
+**Sources** (voice-agent context research):
+- dev-31/realtime-voice-call-agent agent-memory SKILL.md — three context
+  strategies (truncate/summarise/retrieve) with their costs; compaction on a
+  control message through the same ordering guarantees; per-message latency
+  metadata inline in the transcript
+- Medium/Kannappan Suresh — the barge-in sequence: kill TTS, cancel
+  inference, commit *only what was actually spoken* to history
+- aion_agent context-compaction.md — mid-turn compaction numbers
+  (85k→12k tokens), compaction-block marker convention
+- christianbalevski/adf memory-management.md — LLM-powered compaction via a
+  signal-only tool, automatic threshold triggers
+
+**Next (candidate runs):**
+- Live-fire the PostToolUse hook in a real Claude Code session; measure how
+  often the model acts on the excerpt vs the raw result.
+- Jev-call benchmark on synthetic_monitoring / admit corpus to verify the
+  deterministic policies track real Jev keep/drop (batch questions, reuse
+  `~/.agent_squeeze/decisions.sqlite` — key near cap; consider waiting for
+  the cap reset).
+
+**Blocked:** nothing.
+
+**Awaiting push:** everything since the sprint started (local commits only).
