@@ -1132,3 +1132,97 @@ almost exactly, and recall is 100% in both modes on all fixtures.
   — currently tiering is default-on there with no flag to disable.
 - `bench/pruners` adversarial re-check through two-tier squeeze with needle
   recall (Run 21's remaining open item).
+
+## Run 23 — 2026-09-23 04:43 PDT: `--single-tier` wired to the cache-aware + fleet CLI paths
+
+**What:** answered Run 22's open question. Two-tier chunking was
+default-on in `squeeze_cache_aware`/`squeeze_fleet` with no CLI off-ramp;
+now the existing `--single-tier` flag reaches them:
+- `cli.py`: `cmd_squeeze --protect-prefix` branch passes
+  `two_tier=not args.single_tier` to `squeeze_cache_aware`; `fleet` parser
+  gains `--single-tier`, threaded through `cmd_fleet` into `squeeze_fleet`.
+- `fleet.py`: `squeeze_fleet(..., two_tier=True)` — forwarded to
+  `squeeze_cache_aware` on the protect path and to `squeeze_transcript`
+  on the classic path (which was already default-on, so behavior for the
+  plain fleet path is unchanged; the flag now controls both).
+- Fixed the two monkeypatch wrappers in `test_fleet.py` that would have
+  TypeError'd on the new `two_tier` kwarg; ROADMAP.md two-tier checkbox
+  marked done.
+
+**Tests:** 2 new wiring tests — `test_cli_single_tier_propagates`
+(squeeze `--protect-prefix --single-tier` → `two_tier=False`, and
+`True` without the flag) and `test_fleet_cli_single_tier`
+(fleet `--protect-prefix --single-tier` propagation via real
+`cli.main()` argv parsing). All 13 suites green: **88/88 test fns**
+(86 + 2 new). Deterministic stub policies only — no Jev calls, OpenRouter
+cap untouched.
+
+**Blocked:** live-Jev A/B still waits on the OpenRouter key cap reset.
+
+**Awaiting push:** everything since the sprint started (local commits only).
+
+## Run 24 — 2026-09-23 05:05 PDT: chunk-boundary needle split — real regression found, reassembly fix
+
+**What:** answered Runs 20–23's open adversarial item — and found a real bug.
+Run 21's regression bench used a perfect evidence judge on line-packed
+fixtures, so needles were never split by a chunk boundary and the split
+risk was never actually tested. Built
+`bench/chunk_tiers/bench_boundary_split.py`: an error-dense tool result
+with one 4400-char single-line payload (minified-JSON-style) carrying
+`SPLIT_NEEDLE_9ZQ4` straddling the 1500-char hard-split boundary (whole
+under single-tier's 6000, split under two-tier) plus a control needle
+inside a chunk. Two findings:
+
+1. **Reassembly injected "\n" into hard-split lines (fixed).** Chunks from
+   a hard-split long line were re-joined with `"\n".join`, silently
+   breaking any string straddling the split — even when both fragments
+   were kept, the needle never reappeared verbatim. Fix:
+   `chunk_text_breaks()` (new, in `squeeze.py`) marks each chunk's
+   trailing break as hard (one long line) or soft (line boundary);
+   `reassemble_kept()` joins hard breaks with `""`. Chunk texts are
+   byte-identical to the old `chunk_text()`; `admit.py`'s alignment-only
+   use is untouched. Threaded through `squeeze_transcript` and
+   `cache.squeeze_with_policy` (both reassembly sites).
+2. **Fragment-blind judges lose split needles (documented, inherent).**
+   A verbatim-string judge (keep iff chunk contains the full needle) drops
+   both halves under two-tier — a recall regression vs single-tier that
+   no chunker can avoid. A fragment-aware judge (keep on ≥6-char pieces)
+   now recovers the needle verbatim post-fix. Noted as a known limit in
+   the bench header; the live-Jev question (does real Jev reason about
+   fragments?) stays queued for the cap reset.
+
+**Tests:** new `agent_squeeze/test_chunk_breaks.py` (6/6 pass): hard-break
+marking, soft breaks on packed lines, long-line and mixed roundtrips,
+split-needle verbatim recovery under two-tier, keep-everything roundtrip
+byte-identical (modulo the pre-existing trailing-newline drop, asserted
+explicitly). `test_admit.py` fails identically on the pristine tree
+(relative-import runner quirk, pre-existing per Run 10); everything else
+green.
+
+**Numbers** (deterministic judges, zero paid calls — no Jev, decision
+cache and OpenRouter key untouched):
+
+| needle@1495 judge | single recall | two-tier recall (before → after fix) |
+|---|---|---|
+| perfect (verbatim-string) | 2/2 | 0/2 → 0/2 (inherent judge limit, documented) |
+| fragment-aware | 2/2 | 1/2 → **2/2** |
+
+needle@1000 control (inside a chunk): 2/2 both tiers, both judges — no
+regression from the reassembly change.
+
+**Next (candidate runs):**
+- MCP server `squeeze_text`: optional `single_tier` boolean in the tool
+  schema (the CLI gap Run 23 fixed still exists there).
+- Live-Jev A/B on the boundary-split fixture when the cap resets: does
+  real Jev keep needle fragments, or does it need overlap windows at hard
+  splits?
+- Overlap-window experiment: 100-char overlap on hard splits would let
+  fragment-blind judges see the whole needle (cost: ~7% more chunk chars
+  on long-line payloads only).
+
+**Blocked:** live-Jev verification still waits on the OpenRouter key cap reset.
+
+**Awaiting push:** everything since the sprint started (local commits only).
+
+---
+[END OF PROGRESS — keep appending below this line for future runs]

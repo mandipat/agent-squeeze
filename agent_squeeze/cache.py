@@ -17,7 +17,7 @@ the dynamic tail. The next API call then reads the protected prefix from cache
 from . import jev
 from .messages import estimate_tokens
 from .squeeze import (CHUNK_CHARS, ERROR_CHUNK_CHARS, KEEP_THRESHOLD,
-                      _is_error_dense, chunk_text)
+                      _is_error_dense, chunk_text_breaks, reassemble_kept)
 
 # Anthropic pricing ratios used by the offline cost model below.
 CACHE_READ_RATIO = 0.1    # cache reads cost 0.1x of base input
@@ -50,22 +50,22 @@ def squeeze_with_policy(messages, task, policy_fn,
     (mirrors squeeze.squeeze_transcript); False keeps the legacy
     single-tier CHUNK_CHARS chunking."""
     tool_idx = [i for i, m in enumerate(messages) if m.get("role") == "tool"]
-    chunks = []
+    chunks = []  # (msg_pos, chunk_text, hard_after)
     for pos in tool_idx:
         content = messages[pos].get("content", "")
         size = (ERROR_CHUNK_CHARS
                 if two_tier and _is_error_dense(content) else CHUNK_CHARS)
-        for c in chunk_text(content, size):
-            chunks.append((pos, c))
+        for c, hard in chunk_text_breaks(content, size):
+            chunks.append((pos, c, hard))
 
     if chunks:
-        probs, cost = policy_fn([c for _, c in chunks], task)
+        probs, cost = policy_fn([c for _, c, _ in chunks], task)
     else:
         probs, cost = [], 0.0
 
     keep = {i for i, p in enumerate(probs) if p >= threshold}
     by_msg = {}
-    for i, (pos, _) in enumerate(chunks):
+    for i, (pos, _, _) in enumerate(chunks):
         by_msg.setdefault(pos, []).append(i)
     for pos, idxs in by_msg.items():
         if not any(i in keep for i in idxs):
@@ -73,8 +73,8 @@ def squeeze_with_policy(messages, task, policy_fn,
 
     kept_text = {pos: [] for pos in tool_idx}
     for i in sorted(keep):
-        pos, text = chunks[i]
-        kept_text[pos].append(text)
+        pos, text, hard = chunks[i]
+        kept_text[pos].append((text, hard))
 
     new_messages = []
     for pos, m in enumerate(messages):
@@ -83,7 +83,7 @@ def squeeze_with_policy(messages, task, policy_fn,
             dropped = len(by_msg[pos]) - len(kept)
             marker = (f"[squeezed: kept {len(kept)}/{len(by_msg[pos])} chunks]\n"
                       if dropped else "")
-            new_messages.append({**m, "content": marker + "\n".join(kept)})
+            new_messages.append({**m, "content": marker + reassemble_kept(kept)})
         else:
             new_messages.append(m)
     return new_messages, {"chunks_total": len(chunks),
