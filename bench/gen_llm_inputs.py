@@ -21,7 +21,7 @@ import urllib.request
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT_DIR = os.path.join(HERE, "inputs")
 
-API_URL = "https://openrouter.ai/api/alpha/chat/completions"
+API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 SCENARIOS = [
     {
