@@ -607,3 +607,60 @@ release vs docs) are not collapsed, only byte-identical re-fetches.
 **Blocked:** nothing.
 
 **Awaiting push:** everything since the sprint started (local commits only).
+
+## Run 13 — 2026-09-23 02:15 PDT: support-chatbot compression (new sector)
+
+**What:** new module `agent_squeeze/support.py` + synthetic benchmark
+`bench/support_chat/run.py` + 7 unit tests (`agent_squeeze/test_support.py`,
+all pass; full suite 49/49). Support histories bloat in predictable ways:
+greetings, identity verification re-asked by every handoff, template
+apologies, hold-music equivalents, verbatim repeated troubleshooting
+scripts, "anything else" closings. `squeeze_support_thread` works
+turn-by-turn with cross-turn memory (`seen_templates`, `seen_facts`):
+decisions `keep_full` (first fact establishment, resolution summary),
+`keep_excerpt` (verbatim fact lines, rest held via `HoldStore`, byte-identical
+readmit), `notice` (pleasantries, template apologies, exact-duplicate script
+steps, re-verification once facts exist). Free deterministic regex policy;
+a real Jev `policy_fn` is injectable. Nothing kept is ever rewritten —
+the admit-gate rule.
+
+**Why:** the support-chatbot candidate from the mission list (Run 12 queued
+it). Its failure mode is distinct from transcripts/research: the *same*
+information is re-established repeatedly (verification × N handoffs) while
+the resolution facts that matter for handoff appear once at the end. The
+cross-turn memory collapses the repeats; the resolution turn is protected
+verbatim.
+
+**Numbers** (deterministic policy, zero paid calls — no Jev, decision cache
+and OpenRouter key untouched):
+
+| check | result |
+|---|---|
+| synthetic 14-turn thread (greeting, verify, apology, script×2, handoff re-verify, hold, resolution, closing) | 464 → 326 tokens (−29.7%), 5/14 turns noticed, 2 held |
+| needle recall | 3/3 (ACC-77410, CASE-2026-9931, $129.99) |
+| resolution summary | `keep_full` verbatim (asserted in bench + unit test) |
+| repeated troubleshooting script | 2nd copy → notice `[duplicate of earlier turn]` |
+| handoff re-verification | notice `[re-verification; facts established earlier]` |
+| unit tests | 7/7; full suite 49/49 |
+
+**Bug fixed during the run:** `REVERIFY_RE` false-positived on "Confirmation
+email" (`confirm` substring + "address") — trigger now word-boundary
+anchored (`\bconfirm\b`).
+
+Honest limit: 29.7% is small because short turns (≤200 chars) are kept
+verbatim — judging costs more than it saves at that size. Real support
+threads run 50–200 turns with multi-handoff repeats, where the repeat
+collapse compounds.
+
+**Next (candidate runs):**
+- Live-fire the PostToolUse hook in a real Claude Code session; measure how
+  often the model acts on the excerpt vs the raw result.
+- Jev-call benchmark on synthetic_monitoring / admit corpus to verify the
+  deterministic policies track real Jev keep/drop (batch questions, reuse
+  `~/.agent_squeeze/decisions.sqlite` — key near cap; consider waiting for
+  the cap reset).
+
+**Blocked:** nothing.
+
+**Awaiting push:** everything since the sprint started (local commits only).
+

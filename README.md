@@ -123,6 +123,15 @@ python -m agent_squeeze.cli admit tool_results.jsonl --task "..." \
 # re-read a held result by ref (byte-identical), e.g. from the PostToolUse hook
 python -m agent_squeeze.cli admit-readmit "⟦held:bash/0003⟧" > full_result.txt
 
+# support-chatbot threads: collapse greetings, template apologies,
+# re-verification and repeated script steps; resolution summaries stay verbatim
+python - <<'EOF'
+from agent_squeeze.support import squeeze_support_thread
+turns = [{"role": r, "text": t} for r, t in load_my_thread()]  # your turns
+out, stats = squeeze_support_thread(turns)
+print(stats["reduction_pct"], "% reduction,", "needles intact")
+EOF
+
 # admit via the HTTP service; held payloads persist in
 # ~/.agent_squeeze/holds.json and resolve via /v1/readmit
 curl -s -X POST "$AGENT_SQUEEZE_URL/v1/admit" \
