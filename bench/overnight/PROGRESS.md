@@ -1287,3 +1287,38 @@ anyway?) still queued for the cap reset.
 **Blocked:** live-Jev verification still waits on the OpenRouter key cap reset.
 
 **Awaiting push:** everything since the sprint started (local commits only).
+
+## Run 26 — 2026-09-23 05:45 PDT: wire `--overlap-chars` / `single_tier` through CLI + server + MCP
+
+**What:** answered Run 25's queued item — the overlap window was
+library-only. Now reachable from every surface:
+- `cli.py`: `squeeze` and `fleet` gained `--overlap-chars N`
+  (`overlap_chars=0` default = legacy). Threaded into `squeeze_transcript`
+  (classic path), `squeeze_cache_aware` (protect-prefix path), and
+  `squeeze_fleet` (both pass-2 paths via new `overlap_chars` params on
+  `cache.squeeze_cache_aware` and `fleet.squeeze_fleet`).
+- `server.py`: `POST /v1/squeeze`, `/v1/squeeze-cache-aware`,
+  `/v1/squeeze-fleet` accept `overlap_chars` and `single_tier` (explicit
+  `two_tier` wins if both given) — previously these endpoints took only
+  `threshold`/`protect_tokens`.
+- `mcp_server.py`: `squeeze_transcript` tool schema gained `single_tier`
+  (bool) and `overlap_chars` (int); `_tool_squeeze` passes both through
+  to `squeeze_cache_aware` (free deterministic policy untouched).
+- Fixed the two `test_fleet.py` monkeypatch wrappers (new `overlap_chars`
+  kwarg) and the `test_cache_wiring.py` argparse Namespace (new CLI arg);
+  README chunking note documents all four surfaces.
+
+**Tests:** new `agent_squeeze/test_overlap_wiring.py` (6/6 pass): flag
+propagation on squeeze (0/50/100) + cache-aware + fleet via real argv
+parsing; `--single-tier` still reaches `two_tier=False` alongside;
+server endpoints accept `overlap_chars`/`single_tier` (asserted at the
+library boundary, Jev stubbed); MCP schema lists both new args and
+passes them through with cost still $0; **end-to-end through the real
+CLI**: fragment-blind judge, straddling needle at offset 1495 — ov=0
+loses it, `--overlap-chars 100` rescues it verbatim. Full suite:
+**108/108 test fns** green (102 prior + 6 new). Zero paid calls — no Jev,
+decision cache and OpenRouter key untouched.
+
+**Blocked:** live-Jev verification still waits on the OpenRouter key cap reset.
+
+**Awaiting push:** everything since the sprint started (local commits only).
