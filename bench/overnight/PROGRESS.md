@@ -1322,3 +1322,55 @@ decision cache and OpenRouter key untouched.
 **Blocked:** live-Jev verification still waits on the OpenRouter key cap reset.
 
 **Awaiting push:** everything since the sprint started (local commits only).
+
+
+## Run 27 — 2026-09-23 05:50 PDT: public benchmark harness (`agent-squeeze bench --all`)
+
+**What:** answered the ROADMAP Phase 4 item "one command that replays the
+whole paper". New `agent_squeeze/bench_harness.py`: a registry of 14
+benches, each run as a subprocess from the repo root (PYTHONPATH set, works
+from any cwd) with per-bench timeout, exit-code status (pass/fail/timeout/
+skipped), elapsed seconds, and the last 6 stdout lines as the report.
+New `cli bench` subcommand: `--list`, `--all` (default), `--name X`
+(repeatable), `--timeout S`, `--include-keyed`, `-o results.json` for CI.
+13 offline benches (admit_time, pipeline, research, support_chat,
+ttl_tuning, voice_dialogue, 5 chunk_tiers benches, cache_aware, quickstart)
+— all deterministic stub judges, zero paid calls. `live_jev_prune`
+(bench/pruners/jev_prune.py on sre_incident.json) is registered but
+**skipped** unless `--include-keyed` is passed AND OPENROUTER_API_KEY is
+set, so an accidental full-matrix run can never burn API budget. README
+Quick start now shows the offline bench command; ROADMAP Phase 4 checkbox
+marked done.
+
+**Tests:** new `agent_squeeze/test_bench_harness.py` (7/7 pass): registry
+scripts exist on disk, names unique, one real bench passes via
+`run_bench`, keyed bench skips before execution (bogus script proves
+no-execution), timeout status, `bench --list` prints all names, `--name` +
+`-o` JSON roundtrips.
+
+**Numbers** (`bench --all`, this VM, zero paid calls — no Jev, decision
+cache and OpenRouter key untouched):
+
+| result | count |
+|---|---|
+| pass | 13/14 benches |
+| skipped | 1 (`live_jev_prune`, by design) |
+| total wall time | **1.8s** |
+
+Full test suite: 16/17 files green; `test_admit.py` fails identically on
+the pristine tree (relative-import runner quirk, pre-existing since Run
+10 — not caused by this run). Test fn total now 115 (108 + 7 new).
+
+**Next (candidate runs):**
+- Live-Jev A/B on the boundary-split fixture when the cap resets
+  (overlap on/off with real Jev keep/drop) — the cap reset also unlocks
+  the `live_jev_prune` bench for real.
+- Live-fire the PostToolUse hook in a real Claude Code session; measure
+  how often the model acts on the excerpt vs the raw result.
+- Multi-seed runs (ROADMAP Phase 1): 5 seeds per bench, report mean ± std
+  instead of single runs — the harness's JSON output makes this a natural
+  next layer.
+
+**Blocked:** live-Jev verification still waits on the OpenRouter key cap reset.
+
+**Awaiting push:** everything since the sprint started (local commits only).
