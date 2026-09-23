@@ -508,3 +508,48 @@ untouched via temp `CACHE_DB` override):
 **Blocked:** nothing.
 
 **Awaiting push:** everything since the sprint started (local commits only).
+
+## Run 11 — 2026-09-23 01:50 PDT: GitHub quickstart (zero-key 60-second tour)
+
+**What:** new `quickstart/` dir — `fleet.json` (2-agent sample: frontend
+chasing `TRANSACTION_TIMEOUT_77X`, backend chasing `SLOWQ_9ab2`, identical
+install boilerplate across both, polling/healthcheck noise),
+`needles.json` (per-agent needles), `run.py` (swaps the Jev judge for the
+free deterministic boilerplate policy — no key, $0 — runs
+`squeeze_fleet`, prints per-agent/fleet numbers, exits 1 if a needle is
+lost), `README.md` (the tour page with expected output). Top-level README
+"Quick start" now leads with the no-key path before the keyed service path.
+
+**Why:** the GitHub-quickstart candidate from the mission list. Every README
+path previously demanded `OPENROUTER_API_KEY` up front — a visitor hitting
+the repo at 2am bounced. Now `git clone && python quickstart/run.py`
+demonstrates pass-1 cross-agent exact dedup, pass-2 boilerplate drop, and
+needle survival in one command with zero setup. The sample data is honest
+about the mechanism: healthcheck-noise chunks drop, the needle chunks stay
+via unique-line keep + the never-empty fail-safe.
+
+**Numbers** (free deterministic policy, zero paid calls — no Jev, decision
+cache and OpenRouter key untouched):
+
+| check | result |
+|---|---|
+| frontend | 3,584 → 1,634 tokens (54.4%) |
+| backend | 5,134 → 1,591 tokens (69.0%) |
+| fleet | 12,144 → 3,225 tokens (73.4%), 1 cross-agent exact duplicate |
+| needle check | 2/2 survive (TRANSACTION_TIMEOUT_77X, SLOWQ_9ab2) |
+| cost / latency | $0.000000, ~0.0s (no judge calls) |
+
+No library code touched — no test impact (suite was 35 green at Run 9/10).
+
+**Next (candidate runs):**
+- Live-fire the PostToolUse hook in a real Claude Code session; measure how
+  often the model acts on the excerpt vs the raw result.
+- Jev-call benchmark on synthetic_monitoring / admit corpus to verify the
+  deterministic policies track real Jev keep/drop (batch questions, reuse
+  `~/.agent_squeeze/decisions.sqlite` — key near cap; consider waiting for
+  the cap reset).
+
+**Blocked:** nothing.
+
+**Awaiting push:** everything since the sprint started (local commits only).
+

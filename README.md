@@ -6,6 +6,15 @@ one LLM call.
 
 ## Quick start (60 seconds)
 
+No API key needed to try it:
+
+```bash
+git clone https://github.com/mandipat/agent-squeeze && cd agent-squeeze
+python quickstart/run.py        # free policy: 12,144 -> 3,225 tokens, both needles survive
+```
+
+With a key, run the service and point your agents at it:
+
 ```bash
 pip install agent-squeeze            # or: git clone this repo && pip install -e .
 export OPENROUTER_API_KEY=sk-or-v1-...   # Jev via OpenRouter decisions endpoint
