@@ -553,3 +553,57 @@ No library code touched — no test impact (suite was 35 green at Run 9/10).
 
 **Awaiting push:** everything since the sprint started (local commits only).
 
+
+## Run 12 — 2026-09-23 02:05 PDT: deep-research agent compression (new sector)
+
+**What:** new module `agent_squeeze/research.py` + synthetic benchmark
+`bench/research/run.py` + 7 unit tests (`agent_squeeze/test_research.py`,
+all pass; full suite 42/42). Research agents hoard fetched pages — search
+results, blog posts wrapped in nav/cookie/footer boilerplate, docs, forum
+threads, 404s. `squeeze_research_pages` keeps cited/high-signal lines
+verbatim (citations must be byte-exact quotes), holds the rest off-context
+(reuses admit.py's `HoldStore`, byte-identical readmit), and reduces
+pure-boilerplate pages, error pages, and exact-duplicate re-fetches to a
+one-liner notice. Decisions: keep_full / keep_quotes / notice.
+`deterministic_policy` is the free offline judge (boilerplate, noise, and
+error-page regexes + cited-quote + task-keyword signal detection); a real
+Jev `policy_fn` is injectable for production. Nothing kept is ever
+rewritten — the same rule as the admit gate (Run 4).
+
+**Why:** the deep-research-agent candidate from the mission list. Prior runs
+covered coding-agent transcripts, fleet, MCP, hooks, TS SDK, cache interplay;
+research agents were the last big sector unexplored. Their failure mode is
+distinct: the final report cites a handful of passages but the whole page
+stays in context — this keeps the citeable lines verbatim and holds the
+rest, so the report's quotes survive while the noise leaves context.
+
+**Numbers** (deterministic policy, zero paid calls — no Jev, decision cache
+and OpenRouter key untouched):
+
+| check | result |
+|---|---|
+| synthetic 8-page corpus (search, blog+boilerplate, docs, press release, exact-duplicate re-fetch, 404, noisy forum, whitepaper) | 6,302 → 3,774 chars (−40.1%), 1,577 → 945 tokens |
+| blog with nav/cookie/ads/footer | 16 → 4 lines (boilerplate gone, 2 cited quotes kept verbatim) |
+| forum thread (12× "+1/following", "lol", "unsubscribed") | 23 → 5 lines (signal kept: threshold advice, 94%-agreement replay note) |
+| exact-duplicate re-fetch | notice → "duplicate of {url}", held |
+| 404 page | notice, held |
+| needle recall | 2/2 FOUND; cited quotes 2/2 verbatim |
+| unit tests | 7/7; full suite 42/42 |
+
+Honest limits (documented): synthetic corpus is small (6.3k chars) — the
+mechanism is the claim, not the headline number; near-duplicates (press
+release vs docs) are not collapsed, only byte-identical re-fetches.
+
+**Next (candidate runs):**
+- Live-fire the PostToolUse hook in a real Claude Code session; measure how
+  often the model acts on the excerpt vs the raw result.
+- Jev-call benchmark on synthetic_monitoring / admit corpus to verify the
+  deterministic policies track real Jev keep/drop (batch questions, reuse
+  `~/.agent_squeeze/decisions.sqlite` — key near cap; consider waiting for
+  the cap reset).
+- Support-chatbot sector: compress long conversation histories while keeping
+  resolution summaries + tool-call protocol intact.
+
+**Blocked:** nothing.
+
+**Awaiting push:** everything since the sprint started (local commits only).

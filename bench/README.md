@@ -16,6 +16,7 @@ Everything behind the numbers in `../FINDINGS.md`, runnable by anyone.
 | `score.py` | reduction %, evidence recall, latency, cost → markdown table + `summary.json`. |
 | `inputs/` | the 6 benchmark transcripts + evidence lists. |
 | `run.sh` | generate → prune → score, end to end. |
+| `research/run.py` | deep-research compression: fetched pages → citation-worthy excerpts (deterministic, $0). 40.1% chars on the synthetic 8-page corpus; needles + cited quotes verbatim. |
 
 ## Reproduce
 
