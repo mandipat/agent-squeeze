@@ -20,6 +20,7 @@ from .squeeze import squeeze_transcript
 from .cache import squeeze_cache_aware
 from .fleet import squeeze_fleet
 from .admit import admit_session, PersistentHoldStore
+from .tooldef import prune_tool_definitions, readmit_tool
 
 
 def _save(path, payload):
@@ -164,6 +165,60 @@ def cmd_ttl(args):
     print(verdict)
 
 
+def cmd_prune_tools(args):
+    # Input: JSON file — either a bare list of tool definitions or
+    # {"tools": [...]}. Each tool is pruned against the task; pruned
+    # definitions persist in the shared hold store (same one the server
+    # uses), so `tool-readmit` or /v1/readmit-tool can restore them
+    # byte-identically later in the session.
+    raw = json.load(open(args.input))
+    tools = raw["tools"] if isinstance(raw, dict) and "tools" in raw else raw
+    if not isinstance(tools, list):
+        sys.exit("error: input must be a JSON list of tool definitions "
+                 "(or {\"tools\": [...]})")
+    called = [c.strip() for c in (args.called or "").split(",") if c.strip()]
+    store = PersistentHoldStore()
+    kept, ledger, stats = prune_tool_definitions(
+        tools, args.task or "", called=called, store=store)
+    print(f"prune-tools: {stats['tools_before']} -> {stats['tools_after']} tools "
+          f"({stats['tokens_before']} -> {stats['tokens_after']} tokens, "
+          f"{stats['reduction_pct']}% reduction)")
+    _save(args.output, {"tools": kept, "ledger": ledger, "stats": stats})
+    if args.needles:
+        needles = [l.strip() for l in open(args.needles) if l.strip()]
+        kept_names = {t.get("name") for t in kept}
+        lost = [n for n in needles if n not in kept_names]
+        print(f"needles: {len(needles) - len(lost)}/{len(needles)} kept")
+        for n in lost:
+            print(f"  PRUNED: {n}")
+        sys.exit(0 if not lost else 1)
+
+
+def cmd_tool_readmit(args):
+    # Resolve a tool definition pruned by `prune-tools` (CLI) or
+    # /v1/prune-tools (server) — both share the persistent hold store.
+    # The held chars (name\ndescription\nschema-json) are reconstituted into
+    # the original JSON definition (dict-equal, schema key order normalized).
+    store = PersistentHoldStore()
+    try:
+        text = readmit_tool(args.name, store)
+    except KeyError:
+        print(f"tool-readmit: unknown tool {args.name}", file=sys.stderr)
+        sys.exit(1)
+    parts = text.split("\n", 2)
+    try:
+        schema = json.loads(parts[2]) if len(parts) > 2 else {}
+    except ValueError:
+        schema = parts[2] if len(parts) > 2 else {}
+    tool = {"name": parts[0] if parts else args.name,
+            "description": parts[1] if len(parts) > 1 else "",
+            "input_schema": schema}
+    if args.output:
+        _save(args.output, tool)
+    else:
+        print(json.dumps(tool, indent=1))
+
+
 def cmd_bench(args):
     from agent_squeeze import bench_harness as bh
     if args.list:
@@ -264,10 +319,31 @@ def main():
                    help="per-bench timeout in seconds")
     b.add_argument("-o", "--output", required=False, default=None,
                    help="write full results JSON here")
+    p = sub.add_parser("prune-tools",
+                       help="prune an agent's tool list to the task-relevant "
+                            "subset (free judge; pruned defs held for recall)")
+    p.add_argument("input",
+                   help="JSON file: a list of tool definitions "
+                        "(or {\"tools\": [...]})")
+    p.add_argument("-o", "--output", required=True)
+    p.add_argument("--task", required=False, default=None,
+                   help="the agent's OBJECTIVE (not a compression instruction). "
+                        "An empty task keeps EVERYTHING (fail-safe).")
+    p.add_argument("--called", default=None,
+                   help="comma-separated names of recently-called tools "
+                        "(sacred, always kept)")
+    p.add_argument("--needles", default=None,
+                   help="one tool NAME per line; exit 1 if a needle is pruned")
+    t = sub.add_parser("tool-readmit",
+                       help="recall a pruned tool definition by name")
+    t.add_argument("name", help="tool name as pruned, e.g. edit_image")
+    t.add_argument("-o", "--output", required=False, default=None,
+                   help="write the JSON definition here (default: stdout)")
     args = ap.parse_args()
     {"squeeze": cmd_squeeze, "fleet": cmd_fleet, "admit": cmd_admit,
      "admit-readmit": cmd_admit_readmit, "squeeze-ttl": cmd_ttl,
-     "bench": cmd_bench}[args.cmd](args)
+     "bench": cmd_bench, "prune-tools": cmd_prune_tools,
+     "tool-readmit": cmd_tool_readmit}[args.cmd](args)
 
 
 if __name__ == "__main__":

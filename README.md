@@ -197,6 +197,14 @@ curl -s -X POST "$AGENT_SQUEEZE_URL/v1/readmit-tool" \
   -H "Content-Type: application/json" \
   -d '{"name": "edit_image"}'
 
+# same from the CLI (JSON file: a list of tool definitions, or {"tools": [...]})
+python -m agent_squeeze.cli prune-tools tools.json --task "..." \
+  --called exec,grep -o pruned.json --needles must_keep_names.txt
+# exit 1 if a needle tool was pruned; pruned defs land in the shared
+# ~/.agent_squeeze/holds.json store
+python -m agent_squeeze.cli tool-readmit edit_image > edit_image.json
+# → reconstituted JSON definition (re-injectable into the live tool list)
+
 # cache-aware squeeze via the HTTP service
 curl -s -X POST "$AGENT_SQUEEZE_URL/v1/squeeze-cache-aware" \
   -H "Content-Type: application/json" \

@@ -1479,3 +1479,36 @@ Jev, decision cache and OpenRouter key untouched):
 **Blocked:** live-Jev verification still waits on the OpenRouter key cap reset.
 
 **Awaiting push:** everything since the sprint started (local commits only).
+
+## Run 30 — 2026-09-23 06:28 PDT: CLI subcommands for tool-definition pruning
+
+**What:** answered Run 29's queued item — tooldef pruning was reachable
+from the server, MCP, and TS SDK but not the CLI. New:
+- `agent-squeeze prune-tools tools.json --task "..." --called exec,grep
+  -o pruned.json --needles must_keep_names.txt` — input is a JSON list of
+  tool definitions (or `{"tools": [...]}`); runs the same
+  `prune_tool_definitions` as the server with the **shared
+  `PersistentHoldStore`**, so pruned definitions land in
+  `~/.agent_squeeze/holds.json` and are resolvable by `tool-readmit` and
+  `/v1/readmit-tool` alike. `--needles` (one tool NAME per line) exits 1
+  if a required tool was pruned, mirroring the squeeze needle checks.
+- `agent-squeeze tool-readmit edit_image` — reconstitutes the held chars
+  (name\ndescription\nschema-json) into the JSON tool definition
+  (dict-equal to the original; schema key order normalized), ready to
+  splice back into the live tool list; `-o` writes it to a file instead
+  of stdout; unknown name → exit 1.
+
+**Numbers** (free deterministic judge everywhere, zero paid calls — no
+Jev, decision cache and OpenRouter key untouched):
+
+| check | result |
+|---|---|
+| new `agent_squeeze/test_tooldef_cli.py` | **6/6 pass** (end-to-end prune via real argv: 8→4 tools, 313→150 tokens, needles 4/4 kept; dict-input accepted; needles failure exits 1; `tool-readmit` roundtrips `generate_image` dict-equal to original; unknown name exits 1; `--called send_sms` stays sacred) |
+| full test-function count | **133** (127 + 6 new); all test files exit 0 except `test_admit.py` (relative-import runner quirk, pre-existing since Run 10, pristine-tree-identical) |
+| `bench --all` | 14/15 pass (live Jev skipped by design), 1.8s |
+
+README "Use" gained the two commands with verified examples.
+
+**Blocked:** live-Jev verification still waits on the OpenRouter key cap reset.
+
+**Awaiting push:** everything since the sprint started (local commits only).
