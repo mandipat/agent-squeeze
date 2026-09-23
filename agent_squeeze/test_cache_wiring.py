@@ -51,7 +51,7 @@ def run_squeeze_cli(msgs, protect_prefix, single_tier=False):
         args = cli.main.__globals__["argparse"].Namespace(
             cmd="squeeze", input=in_path, output=out_path, task=None,
             threshold=0.5, protect_prefix=protect_prefix, needles=None,
-            single_tier=single_tier)
+            single_tier=single_tier, overlap_chars=0)
         buf = io.StringIO()
         with redirect_stdout(buf):
             cli.cmd_squeeze(args)

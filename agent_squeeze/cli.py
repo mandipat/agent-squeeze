@@ -46,7 +46,8 @@ def cmd_squeeze(args):
     if args.protect_prefix > 0:
         out, stats = squeeze_cache_aware(
             messages, task, protect_tokens=args.protect_prefix,
-            threshold=args.threshold, two_tier=not args.single_tier)
+            threshold=args.threshold, two_tier=not args.single_tier,
+            overlap_chars=args.overlap_chars)
         print(f"cache-aware: prefix of ~{stats['protected_tokens']} tokens kept "
               f"byte-identical (cache-safe); dynamic tail "
               f"{stats['tokens_before'] - stats['protected_tokens']} -> "
@@ -54,7 +55,8 @@ def cmd_squeeze(args):
               f"reduction {stats['reduction_pct']}%")
     else:
         out, stats = squeeze_transcript(messages, task, args.threshold,
-                                        two_tier=not args.single_tier)
+                                        two_tier=not args.single_tier,
+                                        overlap_chars=args.overlap_chars)
         print(f"reduction: {stats['reduction_pct']}% "
               f"({stats['tokens_before']} -> {stats['tokens_after']} tokens), "
               f"${stats['cost_usd']:.6f} in {stats['latency_s']}s")
@@ -122,7 +124,8 @@ def cmd_fleet(args):
         print("task: per-agent (inferred from each agent's first user message)")
     squeezed, report = squeeze_fleet(transcripts, task, args.threshold,
                                      protect_tokens=args.protect_prefix,
-                                     two_tier=not args.single_tier)
+                                     two_tier=not args.single_tier,
+                                     overlap_chars=args.overlap_chars)
     r = report
     print(f"fleet: {r['fleet_tokens_before']} -> {r['fleet_tokens_after']} tokens "
           f"({r['fleet_reduction_pct']}% reduction), "
@@ -177,6 +180,10 @@ def main():
     s.add_argument("--protect-prefix", type=int, default=0,
                    help="keep the first N tokens byte-identical (prompt-cache "
                         "safe); only the tail is squeezed. 0 = off.")
+    s.add_argument("--overlap-chars", type=int, default=0,
+                   help="overlap window (chars) on hard-split chunks so "
+                        "fragment-blind judges see boundary-straddling "
+                        "evidence whole. 100 recommended; 0 = off.")
     s.add_argument("--needles", default=None)
     f = sub.add_parser("fleet", help="compress N agents running simultaneously")
     f.add_argument("inputs", nargs="+"); f.add_argument("-o", "--output", required=True)
@@ -192,6 +199,10 @@ def main():
                    help="disable two-tier chunking (uniform 6000-char chunks; "
                         "default is fine 1500-char chunks for error-dense "
                         "tool results)")
+    f.add_argument("--overlap-chars", type=int, default=0,
+                   help="overlap window (chars) on hard-split chunks so "
+                        "fragment-blind judges see boundary-straddling "
+                        "evidence whole. 100 recommended; 0 = off.")
     f.add_argument("--needles", default=None)
     a = sub.add_parser("admit", help="gate tool results before context entry")
     a.add_argument("input", help="JSONL: one {\"name\": ..., \"text\": ...} per line")

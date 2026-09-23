@@ -107,17 +107,25 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(400, {"error": "invalid JSON"})
         try:
             threshold = float(data.get("threshold", 0.5))
+            two_tier = not data.get("single_tier", False)
+            if "two_tier" in data:  # explicit wins over single_tier
+                two_tier = bool(data["two_tier"])
+            overlap = int(data.get("overlap_chars", 0))
             if self.path == "/v1/squeeze":
                 messages = _as_messages(data.get("messages"))
                 task = data.get("task") or infer_task(messages)
-                out, stats = squeeze_transcript(messages, task, threshold)
+                out, stats = squeeze_transcript(messages, task, threshold,
+                                                two_tier=two_tier,
+                                                overlap_chars=overlap)
                 return self._send(200, {"messages": out, "stats": stats})
             if self.path == "/v1/squeeze-cache-aware":
                 messages = _as_messages(data.get("messages"))
                 task = data.get("task") or infer_task(messages)
                 protect = int(data.get("protect_tokens", 1024))
                 out, stats = squeeze_cache_aware(messages, task, protect,
-                                                 threshold=threshold)
+                                                 threshold=threshold,
+                                                 two_tier=two_tier,
+                                                 overlap_chars=overlap)
                 return self._send(200, {"messages": out, "stats": stats})
             if self.path == "/v1/squeeze-fleet":
                 raw = data.get("transcripts") or {}
@@ -125,7 +133,8 @@ class Handler(BaseHTTPRequestHandler):
                 protect = int(data.get("protect_tokens", 0))
                 out, report = squeeze_fleet(
                     transcripts, data.get("task"), threshold,
-                    protect_tokens=protect)
+                    protect_tokens=protect, two_tier=two_tier,
+                    overlap_chars=overlap)
                 return self._send(200, {"transcripts": out, "report": report})
             if self.path == "/v1/admit":
                 store = _hold_store()

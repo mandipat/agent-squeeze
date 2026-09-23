@@ -99,16 +99,18 @@ def squeeze_with_policy(messages, task, policy_fn,
 
 def squeeze_cache_aware(messages, task, protect_tokens=1024,
                         policy_fn=None, threshold=KEEP_THRESHOLD,
-                        two_tier=True):
+                        two_tier=True, overlap_chars=0):
     """Returns (new_messages, stats). The protected prefix is returned
     byte-identical; only the tail is squeezed. `policy_fn` defaults to
     jev.score_chunks. `two_tier` enables error-dense finer chunking on the
-    tail (mirrors squeeze.squeeze_transcript)."""
+    tail (mirrors squeeze.squeeze_transcript); `overlap_chars` adds an
+    overlap window on hard-split chunks (fragment-blind-judge rescue)."""
     policy = policy_fn or jev.score_chunks
     prefix, tail = split_protected(messages, protect_tokens)
     squeezed_tail, tstats = squeeze_with_policy(tail, task, policy,
                                                threshold=threshold,
-                                               two_tier=two_tier)
+                                               two_tier=two_tier,
+                                               overlap_chars=overlap_chars)
     new_messages = list(prefix) + squeezed_tail
 
     before = sum(estimate_tokens(m.get("content", "")) for m in messages)

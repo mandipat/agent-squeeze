@@ -103,7 +103,11 @@ of long single lines, so even a fragment-blind judge sees a
 boundary-straddling needle whole (+~4% judge-input chars on long-line
 payloads only, zero extra judge calls); the overlap is stripped on
 reassembly, output bytes unaffected. See
-`bench/chunk_tiers/bench_overlap.py`.
+`bench/chunk_tiers/bench_overlap.py`. The overlap is reachable from every
+surface: `squeeze`/`fleet --overlap-chars 100`, the `overlap_chars` JSON key
+on `POST /v1/squeeze`, `/v1/squeeze-cache-aware`, `/v1/squeeze-fleet`
+(`single_tier: true` also accepted there), and the `overlap_chars` /
+`single_tier` args of the `squeeze_transcript` MCP tool.
 
 ## Use
 

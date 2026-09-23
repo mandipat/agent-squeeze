@@ -27,7 +27,8 @@ def _hash(text):
 
 
 def squeeze_fleet(transcripts, task=None, threshold=0.5, min_dup_chars=60,
-                  protect_tokens=0, policy_fn=None, two_tier=True):
+                  protect_tokens=0, policy_fn=None, two_tier=True,
+                  overlap_chars=0):
     """transcripts: {agent_id: [messages]}. Returns (squeezed, report).
 
     task: a single shared objective (str), a per-agent dict {agent_id: task},
@@ -49,6 +50,9 @@ def squeeze_fleet(transcripts, task=None, threshold=0.5, min_dup_chars=60,
     two_tier: pass through to the per-agent squeeze — error-dense tool
           results get finer chunks (default True; False = legacy uniform
           chunking).
+
+    overlap_chars: pass through to the per-agent squeeze — overlap window on
+          hard-split chunks (Run 25's fragment-blind-judge rescue; 0 = off).
 
     Pass 1 — global exact-dedup across agents (in dict order; first agent wins).
     Pass 2 — per-agent squeeze on what remains.
@@ -85,10 +89,12 @@ def squeeze_fleet(transcripts, task=None, threshold=0.5, min_dup_chars=60,
                                              protect_tokens,
                                              policy_fn=policy_fn,
                                              threshold=threshold,
-                                             two_tier=two_tier)
+                                             two_tier=two_tier,
+                                             overlap_chars=overlap_chars)
         else:
             out, stats = squeeze_transcript(messages, agent_task, threshold,
-                                            two_tier=two_tier)
+                                            two_tier=two_tier,
+                                            overlap_chars=overlap_chars)
         squeezed[agent_id] = out
         per_agent[agent_id] = stats
         total_cost += stats["cost_usd"]

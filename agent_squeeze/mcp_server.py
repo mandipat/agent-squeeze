@@ -72,9 +72,13 @@ def _tool_squeeze(args):
     task = args.get("task") or infer_task(messages)
     threshold = float(args.get("threshold", 0.5))
     protect = int(args.get("protect_tokens", 1024))
+    two_tier = not args.get("single_tier", False)
+    overlap = int(args.get("overlap_chars", 0))
     out, stats = squeeze_cache_aware(messages, task, protect,
                                     policy_fn=_squeeze_policy(),
-                                    threshold=threshold)
+                                    threshold=threshold,
+                                    two_tier=two_tier,
+                                    overlap_chars=overlap)
     return {"messages": out, "stats": stats}
 
 
@@ -138,6 +142,19 @@ TOOLS = {
                 "protect_tokens": {"type": "integer",
                                    "description": "prefix tokens kept "
                                                   "byte-identical, default 1024"},
+                "single_tier": {"type": "boolean",
+                                "description": "disable two-tier chunking "
+                                             "(uniform 6000-char chunks; "
+                                             "default False = finer "
+                                             "1500-char chunks on "
+                                             "error-dense tool results)"},
+                "overlap_chars": {"type": "integer",
+                                  "description": "overlap window (chars) on "
+                                                 "hard-split chunks so "
+                                                 "fragment-blind judges see "
+                                                 "boundary-straddling evidence "
+                                                 "whole; 100 recommended, "
+                                                 "default 0"},
             },
             "required": ["messages"],
         },
