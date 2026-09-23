@@ -1430,3 +1430,52 @@ README chunking/tools section.
 **Blocked:** live-Jev verification still waits on the OpenRouter key cap reset.
 
 **Awaiting push:** everything since the sprint started (local commits only).
+
+## Run 29 — 2026-09-23 06:15 PDT: wire tool-definition pruning into server + MCP + TS SDK
+
+**What:** the Run 28 tooldef module was library-only — now it is callable
+from every surface. New: `POST /v1/prune-tools`
+(`{"tools": [...], "task": "...", "called": [...]}` → `{"tools": [kept…],
+"ledger": […], "stats": {…}}`) and `POST /v1/readmit-tool` (`{"name": "gh"}`
+or `{"ref": …}` → byte-identical definition; 404 on unknown) on the HTTP
+service — both use the shared `PersistentHoldStore`, so pruned definitions
+persist across requests/restarts like admit holds; `prune_tool_definitions`
++ `readmit_tool` MCP tools in `mcp_server.py` (registry now 6 tools, docs
+updated); TS SDK `pruneTools(tools, task, called)` + `readmitTool(name)`
+with typed result shapes (`ToolDefinition`, `ToolPruneResult`, …), stub
+test now round-trips all 10 endpoints incl. the 404 path. README gained an
+HTTP prune/readmit example; `bench/mcp_server/README.md` tool table and the
+plugin `SKILL.md` list the new tools.
+
+**Recall bug found by the wiring test (fixed this run):** the deterministic
+judge pruned `git` on the task "…open a PR" — one strong signal (task
+acronym "PR" → alias "git") wasn't enough under the flat 2-hit threshold.
+Fix: `_task_keywords` now returns `(words, strong)` where strong =
+uppercase acronyms + their alias-table expansions ("PR"→git/gh/pull); a
+single strong hit keeps ("explicit naming, not vocabulary coincidence").
+Deliberately narrow — verb aliases ("fix"→"edit") stay weak and still need
+2 hits, so the Run 28 precision work (stopword set, word-boundary matching)
+is untouched.
+
+**Numbers** (free deterministic policy everywhere, zero paid calls — no
+Jev, decision cache and OpenRouter key untouched):
+
+| check | result |
+|---|---|
+| new `test_tooldef_wiring.py` | 5/5 pass (server prune + readmit roundtrip byte-identical, 400/404 paths, MCP prune/readmit, tool registry = 6) |
+| full Python suite | **127/127** test fns (122 prior + 5 new) — caught 1 stale `test_tools_list` assertion (4→6 tools), fixed |
+| Run 28 `bench/tooldef` numbers after the strong-signal fix | **unchanged**: 41 → 8 tools, 1547 → 318 tokens (−79.4%), needle recall 8/8 |
+| `bench --all` | 14/15 pass (live Jev skipped by design), 1.8s |
+| TS SDK `npm test` | tsc strict build + stub round-trip of all 10 endpoints green |
+
+**Next (candidate runs):**
+- Live-Jev A/B when the cap resets: does real Jev beat the alias-table
+  judge on recall (needs fewer aliases, catches cross-domain tools)?
+- Cross-agent *semantic* dedup (Phase 3, opt-in `--allow-near-dup`).
+- Multi-seed runs (ROADMAP Phase 1): 5 seeds per bench, mean ± std.
+- CLI subcommand for tooldef pruning (`agent-squeeze prune-tools` from a
+  tools JSON file) to complete the surface parity.
+
+**Blocked:** live-Jev verification still waits on the OpenRouter key cap reset.
+
+**Awaiting push:** everything since the sprint started (local commits only).

@@ -7,7 +7,10 @@ import {
   Message,
   ReadmitIfMentionedResult,
   ReadmitResult,
+  ReadmitToolResult,
   SqueezeResult,
+  ToolDefinition,
+  ToolPruneResult,
   TtlRecommendation,
 } from "./types.js";
 
@@ -121,5 +124,23 @@ export class AgentSqueezeClient {
       dynamic_tokens: dynamicTokens,
       base_per_mtok: basePerMtok,
     });
+  }
+
+  /**
+   * Prune the agent's tool list to the task-relevant subset before a
+   * session starts. Pruned definitions are held off-context; recall them
+   * byte-identically with {@link readmitTool}.
+   */
+  pruneTools(
+    tools: ToolDefinition[],
+    task = "",
+    called: string[] = [],
+  ): Promise<ToolPruneResult> {
+    return this.post("/v1/prune-tools", { tools, task, called });
+  }
+
+  /** Recall a pruned tool definition by name (or hold ref). Byte-identical. */
+  readmitTool(name: string): Promise<ReadmitToolResult> {
+    return this.post("/v1/readmit-tool", { name });
   }
 }

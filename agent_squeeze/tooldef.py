@@ -14,7 +14,10 @@ Priority of signals (mirrors jev-tool-permissions practice):
   1. Recently called tools are sacred — the agent already demonstrated need.
   2. Task vocabulary overlap with name + description (+ schema property
      names) — a task about "pytest failures" keeps bash/grep, drops
-     the calendar schema.
+     the calendar schema. Two weak (raw-word or verb-alias) hits needed,
+     but ONE strong hit keeps: an uppercase acronym in the task ("PR") or
+     its alias-table expansion ("git" from "PR") is deliberate,
+     unambiguous naming.
   3. Fail-safe: an empty/nonsense task or zero hits keeps EVERYTHING. An
      agent that needs an unpruned tool but lost its schema is a hard
      failure; a slightly large tool list is just cost.
@@ -58,13 +61,25 @@ STOP = {"with", "from", "that", "this", "these", "those", "and", "for",
 
 
 def _task_keywords(task):
+    """Task vocabulary, split into (words, strong).
+
+    `strong` = keywords the task *named explicitly*: uppercase acronyms
+    ("PR") plus their alias-table expansions ("git", "gh", "pull"). A single
+    strong hit keeps a tool ("open a PR" keeps git) because an acronym is a
+    deliberate, unambiguous naming — unlike verb aliases ("fix" -> "edit"),
+    which stay weak and still need KEEP_THRESHOLD hits.
+    """
     base = {w.lower() for w in re.findall(r"[A-Za-z][A-Za-z0-9_\-]{3,}", task or "")}
     base -= STOP
     acronyms = {a.lower() for a in re.findall(r"\b[A-Z]{2,3}\b", task or "")}
+    strong = set(acronyms)
     words = base | acronyms
     for k in list(words):
-        words |= {r for r in RELATED.get(k, ())}
-    return words
+        new = set(RELATED.get(k, ())) - words
+        words |= new
+        if k in acronyms:
+            strong |= new
+    return words, strong
 
 
 def _tool_text(tool):
@@ -92,10 +107,10 @@ def deterministic_policy(tool, task, called):
         return "keep", 1.0, "recently called — sacred"
     _, desc, _, props = _tool_text(tool)
     hay = (name.replace("_", " ") + " " + desc + " " + props.replace("_", " ")).lower()
-    keywords = _task_keywords(task)
+    keywords, strong = _task_keywords(task)
     hits = sorted({k for k in keywords if re.search(r"\b" + re.escape(k) + r"\b", hay)})
     score = min(1.0, len(hits) / 4.0)
-    if len(hits) >= KEEP_THRESHOLD:
+    if len(hits) >= KEEP_THRESHOLD or any(h in strong for h in hits):
         return "keep", score, "keyword hits: " + ", ".join(hits[:6])
     return "prune", score, "no task signal (%d keyword hits)" % len(hits)
 

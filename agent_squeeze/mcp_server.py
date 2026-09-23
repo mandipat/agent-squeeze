@@ -2,7 +2,7 @@
 
 Why: agents that speak MCP (Claude Desktop, Claude Code, any MCP host) can
 call token compression as tools instead of hitting the HTTP service.
-Four tools:
+Six tools:
 
   squeeze_transcript — cache-aware squeeze of a message list. The protected
                        prefix is returned byte-identical so provider prompt
@@ -15,6 +15,14 @@ Four tools:
                        the byte-identical payload.
   recommend_ttl        — pick the cheaper prompt-cache TTL (5-min vs 1-hour)
                        from observed inter-turn gaps. Pure arithmetic, $0.
+  prune_tool_definitions — prune the tool list to the task-relevant subset
+                       before a session (coding agents pay for 200 irrelevant
+                       schemas every turn). Pruned definitions stay held
+                       off-context and recall byte-identically via
+                       readmit_tool. Recently-called tools are sacred;
+                       empty/no-signal tasks keep everything (fail-safe).
+  readmit_tool       — recall a pruned tool definition by name (or hold ref)
+                       byte-identically when the agent needs it mid-session.
 
 Default policy is deterministic and free (no network): the squeeze tool
 drops chunks that look like boilerplate (low unique-line ratio, mirroring
@@ -35,6 +43,7 @@ from .cache import squeeze_cache_aware
 from .messages import from_openai, infer_task
 from . import jev
 from .ttl import recommend_ttl
+from .tooldef import prune_tool_definitions, readmit_tool, readmit_by_ref
 
 PROTOCOL_VERSION = "2024-11-05"
 SERVER_INFO = {"name": "agent-squeeze", "version": "0.1.0"}
@@ -101,6 +110,28 @@ def _tool_readmit(args):
     except KeyError:
         raise ValueError(f"unknown ref: {ref}")
     return {"ref": ref, "text": text}
+
+
+def _tool_prune_tools(args):
+    tools = args.get("tools")
+    if not isinstance(tools, list):
+        raise ValueError("tools (list of tool definitions) is required")
+    kept, ledger, stats = prune_tool_definitions(
+        tools, args.get("task") or "", called=args.get("called") or [],
+        store=PersistentHoldStore())
+    return {"tools": kept, "ledger": ledger, "stats": stats}
+
+
+def _tool_readmit_tool(args):
+    store = PersistentHoldStore()
+    try:
+        if args.get("ref"):
+            return {"name": args.get("name"),
+                    "text": readmit_by_ref(args["ref"], store)}
+        name = args.get("name")
+        return {"name": name, "text": readmit_tool(name, store)}
+    except KeyError:
+        raise ValueError(f"unknown tool: {args.get('name') or args.get('ref')}")
 
 
 def _tool_ttl(args):
@@ -210,6 +241,43 @@ TOOLS = {
                                   "description": "base $/MTok, default 3.0"},
             },
             "required": ["turn_gaps_sec"],
+        },
+    },
+    "prune_tool_definitions": {
+        "fn": _tool_prune_tools,
+        "description": ("Prune an agent's tool list to the task-relevant "
+                        "subset (recently-called tools are sacred; no-signal "
+                        "tasks keep everything). Pruned definitions are held "
+                        "off-context; recall them byte-identically with "
+                        "readmit_tool."),
+        "schema": {
+            "type": "object",
+            "properties": {
+                "tools": {"type": "array",
+                          "description": "tool definitions "
+                                         "[{name, description, input_schema}]"},
+                "task": {"type": "string",
+                         "description": "agent objective"},
+                "called": {"type": "array",
+                           "description": "tool names already used this "
+                                          "session (sacred, never pruned)"},
+            },
+            "required": ["tools"],
+        },
+    },
+    "readmit_tool": {
+        "fn": _tool_readmit_tool,
+        "description": ("Recall a pruned tool definition byte-identically, "
+                        "by tool name (or hold ref)."),
+        "schema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string",
+                         "description": "tool name, e.g. 'gh'"},
+                "ref": {"type": "string",
+                        "description": "hold ref from the prune ledger "
+                                       "(alternative to name)"},
+            },
         },
     },
 }

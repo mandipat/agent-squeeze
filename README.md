@@ -187,6 +187,16 @@ curl -s -X POST "$AGENT_SQUEEZE_URL/v1/readmit" \
   -H "Content-Type: application/json" \
   -d '{"ref": "⟦held:bash/0003⟧"}'
 
+# prune the tool list before a session: per-task keep/prune, free judge
+curl -s -X POST "$AGENT_SQUEEZE_URL/v1/prune-tools" \
+  -H "Content-Type: application/json" \
+  -d '{"tools": [{"name": "gh", "description": "GitHub CLI"}, {"name": "edit_image", "description": "generate images"}], "task": "Debug the failing pytest suite and open a PR", "called": ["bash"]}'
+# → {"tools": [kept...], "ledger": [...], "stats": {...}}; pruned definitions held
+# recall one later, byte-identical:
+curl -s -X POST "$AGENT_SQUEEZE_URL/v1/readmit-tool" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "edit_image"}'
+
 # cache-aware squeeze via the HTTP service
 curl -s -X POST "$AGENT_SQUEEZE_URL/v1/squeeze-cache-aware" \
   -H "Content-Type: application/json" \
@@ -195,7 +205,8 @@ curl -s -X POST "$AGENT_SQUEEZE_URL/v1/squeeze-cache-aware" \
 # MCP server (Claude Desktop / Claude Code): compression as tools, stdio
 # free deterministic policy by default; AGENT_SQUEEZE_MCP_JEV=1 for real Jev
 claude mcp add agent-squeeze -- python3 -m agent_squeeze.mcp_server
-# tools: squeeze_transcript, admit_tool_result, readmit, recommend_ttl — see bench/mcp_server/
+# tools: squeeze_transcript, admit_tool_result, readmit, recommend_ttl,
+# prune_tool_definitions, readmit_tool — see bench/mcp_server/
 
 # TypeScript SDK (zero runtime deps): typed client for every /v1/* endpoint
 #   npm i @agent-squeeze/sdk   (or npm pack from ts-sdk/)

@@ -29,7 +29,8 @@ agent-squeeze-serve --port 8765
 
 **No service needed?** If the user has agent-squeeze registered as an MCP
 server (`claude mcp add agent-squeeze -- python3 -m agent_squeeze.mcp_server`),
-call the `squeeze_transcript` / `admit_tool_result` / `readmit` tools
+call the `squeeze_transcript` / `admit_tool_result` / `readmit` /
+`prune_tool_definitions` / `readmit_tool` tools
 directly instead of POSTing — same free deterministic policy.
 
 POST the conversation to `/v1/squeeze`. `task` is the agent's objective

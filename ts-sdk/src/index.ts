@@ -9,6 +9,11 @@ export {
   type Message,
   type ReadmitIfMentionedResult,
   type ReadmitResult,
+  type ReadmitToolResult,
   type SqueezeResult,
   type SqueezeStats,
+  type ToolDefinition,
+  type ToolPruneLedgerEntry,
+  type ToolPruneResult,
+  type ToolPruneStats,
 } from "./types.js";

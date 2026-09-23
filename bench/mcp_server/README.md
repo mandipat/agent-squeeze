@@ -12,6 +12,8 @@ compression as tools instead of running the HTTP service:
 | `admit_tool_result` | admit-time gate: judge a tool result *before* it enters context (keep_full / trim / notice / hold) |
 | `readmit` | resolve a hold ref (e.g. `⟦held:bash/0003⟧`) back to its byte-identical payload |
 | `recommend_ttl` | pick the cheaper Anthropic prompt-cache TTL (5-min vs 1-hour) from observed `turn_gaps_sec`; pure arithmetic, $0 — the decision is not "always 1-hour" (see Run 15: for >1h idle gaps the 5-min write is cheaper again) |
+| `prune_tool_definitions` | prune the tool list to the task-relevant subset (`tools`, `task`, `called`); recently-called tools are sacred, no-signal tasks keep everything; pruned definitions held off-context, free deterministic policy — recall byte-identically with `readmit_tool` |
+| `readmit_tool` | recall a pruned tool definition by name (or hold ref) byte-identically |
 
 Free deterministic policy by default (boilerplate-detector for squeeze,
 `admit.py`'s deterministic heuristic for the admit gate) — **zero network,

@@ -32,7 +32,8 @@ def test_tools_list():
     s, _, _ = mk_server()
     names = [t["name"] for t in call(s, "tools/list")["result"]["tools"]]
     assert set(names) == {"squeeze_transcript", "admit_tool_result",
-                          "readmit", "recommend_ttl"}
+                          "readmit", "recommend_ttl",
+                          "prune_tool_definitions", "readmit_tool"}
     for t in call(s, "tools/list", rid=2)["result"]["tools"]:
         assert "inputSchema" in t
 

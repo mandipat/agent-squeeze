@@ -75,6 +75,45 @@ export interface TtlRecommendation {
   hit_rate_1hour: number;
 }
 
+/** A single tool definition ({name, description, input_schema}) for pruning. */
+export interface ToolDefinition {
+  name: string;
+  description?: string;
+  input_schema?: Record<string, unknown>;
+  [k: string]: unknown;
+}
+
+/** One line of the tool-prune ledger. */
+export interface ToolPruneLedgerEntry {
+  name: string;
+  decision: "keep" | "prune";
+  score: number;
+  reason: string;
+  ref?: string;
+}
+
+/** Stats returned alongside a pruned tool list. */
+export interface ToolPruneStats {
+  tools_before: number;
+  tools_after: number;
+  tokens_before: number;
+  tokens_after: number;
+  reduction_pct: number;
+  kept: number;
+  pruned: number;
+}
+
+export interface ToolPruneResult {
+  tools: ToolDefinition[];
+  ledger: ToolPruneLedgerEntry[];
+  stats: ToolPruneStats;
+}
+
+export interface ReadmitToolResult {
+  name: string | null;
+  text: string;
+}
+
 /** Error raised for non-2xx responses. */
 export class AgentSqueezeError extends Error {
   constructor(

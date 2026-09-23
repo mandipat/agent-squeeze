@@ -75,6 +75,29 @@ function startStub() {
             hit_rate_5min: 1.0,
             hit_rate_1hour: 1.0,
           });
+        case "/v1/prune-tools":
+          return json(200, {
+            tools: data.tools.slice(0, 1),
+            ledger: data.tools.map((t) => ({
+              name: t.name,
+              decision: "keep",
+              score: 0.75,
+              reason: "stub",
+            })),
+            stats: {
+              tools_before: data.tools.length,
+              tools_after: 1,
+              tokens_before: 100,
+              tokens_after: 25,
+              reduction_pct: 75.0,
+              kept: 1,
+              pruned: data.tools.length - 1,
+            },
+          });
+        case "/v1/readmit-tool":
+          return data.name === "gh"
+            ? json(200, { name: "gh", text: "GH DEFINITION" })
+            : json(404, { error: "unknown tool" });
         default:
           return json(404, { error: "not found" });
       }
@@ -123,6 +146,27 @@ test("SDK round-trips all endpoints", async (t) => {
   const ttlFast = await client.recommendTtl([30, 45], 200000, 2000, 3.0);
   assert.equal(ttlFast.recommended, "5min");
   assert.equal(ttlSlow.saving_pct, 23.3);
+
+  const pt = await client.pruneTools(
+    [
+      { name: "gh", description: "github cli" },
+      { name: "edit_image", description: "generate images" },
+    ],
+    "open a PR",
+    ["bash"],
+  );
+  assert.equal(pt.stats.reduction_pct, 75.0);
+  assert.equal(pt.tools.length, 1);
+  assert.equal(pt.ledger.length, 2);
+
+  const rt = await client.readmitTool("gh");
+  assert.equal(rt.text, "GH DEFINITION");
+
+  await assert.rejects(client.readmitTool("nope"), (e) => {
+    assert.ok(e instanceof AgentSqueezeError);
+    assert.equal(e.status, 404);
+    return true;
+  });
 
   // auth header is sent on every call
   assert.ok(SEEN.auth.every((h) => h === "Bearer sekrit"));

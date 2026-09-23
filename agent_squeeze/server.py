@@ -36,6 +36,16 @@ Endpoints:
                            {"recommended": "5min"|"1hour", "cost_5min_usd": ...,
                             "cost_1hour_usd": ..., "saving_pct": ...,
                             "hit_rate_5min": ..., "hit_rate_1hour": ...}
+    POST /v1/prune-tools  {"tools": [{"name": ..., "description": ...,
+                           "input_schema": {...}}], "task": "...",
+                           "called": ["bash"]} ->
+                           {"tools": [kept...], "ledger": [...],
+                            "stats": {...}}  prune the tool list to the
+                           task-relevant subset; pruned definitions are held
+                           off-context (free deterministic judge by default).
+    POST /v1/readmit-tool {"name": "gh"} -> {"name": ..., "text": ...}
+                           recall a pruned tool definition byte-identically
+                           (or pass {"ref": ...} to resolve a hold ref).
 
 "task" is the agents' objective (not a compression instruction). Omit it and
 each agent's task is inferred from its own first user message.
@@ -50,6 +60,7 @@ from .cache import squeeze_cache_aware
 from .squeeze import squeeze_transcript
 from .admit import admit_tool_result, admit_session, PersistentHoldStore
 from .ttl import recommend_ttl
+from .tooldef import prune_tool_definitions, readmit_tool, readmit_by_ref
 
 SERVICE_TOKEN = os.environ.get("AGENT_SQUEEZE_TOKEN")
 
@@ -182,6 +193,29 @@ class Handler(BaseHTTPRequestHandler):
                     int(data.get("dynamic_tokens", 0)),
                     float(data.get("base_per_mtok", 3.0)))
                 return self._send(200, rec)
+            if self.path == "/v1/prune-tools":
+                store = _hold_store()
+                tools = data.get("tools")
+                if not isinstance(tools, list):
+                    return self._send(
+                        400, {"error": "tools must be a list of tool definitions"})
+                kept, ledger, stats = prune_tool_definitions(
+                    tools, data.get("task") or "",
+                    called=data.get("called") or [], store=store)
+                return self._send(
+                    200, {"tools": kept, "ledger": ledger, "stats": stats})
+            if self.path == "/v1/readmit-tool":
+                store = _hold_store()
+                try:
+                    if data.get("ref"):
+                        text = readmit_by_ref(data["ref"], store)
+                        name = data.get("name")
+                    else:
+                        name = data.get("name")
+                        text = readmit_tool(name, store)
+                except KeyError:
+                    return self._send(404, {"error": "unknown tool"})
+                return self._send(200, {"name": name, "text": text})
         except RuntimeError as e:  # e.g. OPENROUTER_API_KEY missing
             return self._send(500, {"error": str(e)})
         except Exception as e:  # never leak tracebacks to clients
@@ -206,7 +240,8 @@ def main():
     print("endpoints: GET /health, POST /v1/squeeze, "
           "POST /v1/squeeze-cache-aware, POST /v1/squeeze-fleet, "
           "POST /v1/admit, POST /v1/admit-batch, POST /v1/readmit, "
-          "POST /v1/readmit-if-mentioned")
+          "POST /v1/readmit-if-mentioned, POST /v1/recommend-ttl, "
+          "POST /v1/prune-tools, POST /v1/readmit-tool")
     server.serve_forever()
 
 
