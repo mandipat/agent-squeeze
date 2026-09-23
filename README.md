@@ -94,6 +94,15 @@ python -m agent_squeeze.cli squeeze ~/.claude/projects/myproj/transcript.jsonl \
 # a fleet of agents running simultaneously
 python -m agent_squeeze.cli fleet fe.jsonl be.jsonl infra.jsonl \
   --names frontend,backend,infra -o fleet.json --needles needles.txt
+
+# cache-aware: keep the first 4096 tokens byte-identical (prompt-cache safe)
+python -m agent_squeeze.cli squeeze transcript.jsonl --task "..." \
+  -o squeezed.json --protect-prefix 4096
+
+# same via the HTTP service
+curl -s -X POST "$AGENT_SQUEEZE_URL/v1/squeeze-cache-aware" \
+  -H "Content-Type: application/json" \
+  -d '{"messages": [...], "task": "...", "protect_tokens": 4096}'
 ```
 
 `--task` defaults to the transcript's first user message (the agent's

@@ -17,6 +17,7 @@ import sys
 
 from .messages import infer_task, load_any, transcript_tokens
 from .squeeze import squeeze_transcript
+from .cache import squeeze_cache_aware
 from .fleet import squeeze_fleet
 
 
@@ -45,6 +46,20 @@ def cmd_squeeze(args):
     print(f"reduction: {stats['reduction_pct']}% "
           f"({stats['tokens_before']} -> {stats['tokens_after']} tokens), "
           f"${stats['cost_usd']:.6f} in {stats['latency_s']}s")
+    if args.protect_prefix > 0:
+        out, stats = squeeze_cache_aware(
+            messages, task, protect_tokens=args.protect_prefix,
+            threshold=args.threshold)
+        print(f"cache-aware: prefix of ~{stats['protected_tokens']} tokens kept "
+              f"byte-identical (cache-safe); dynamic tail "
+              f"{stats['tokens_before'] - stats['protected_tokens']} -> "
+              f"{stats['dynamic_tokens_after']} tokens; "
+              f"reduction {stats['reduction_pct']}%")
+    else:
+        out, stats = squeeze_transcript(messages, task, args.threshold)
+        print(f"reduction: {stats['reduction_pct']}% "
+              f"({stats['tokens_before']} -> {stats['tokens_after']} tokens), "
+              f"${stats['cost_usd']:.6f} in {stats['latency_s']}s")
     _save(args.output, {"messages": out, "stats": stats})
     if args.needles:
         ok = _check_needles(out, args.needles)
@@ -88,6 +103,9 @@ def main():
                    help="the agent's OBJECTIVE (not a compression instruction). "
                         "Defaults to the transcript's first user message.")
     s.add_argument("--threshold", type=float, default=0.5)
+    s.add_argument("--protect-prefix", type=int, default=0,
+                   help="keep the first N tokens byte-identical (prompt-cache "
+                        "safe); only the tail is squeezed. 0 = off.")
     s.add_argument("--needles", default=None)
     f = sub.add_parser("fleet", help="compress N agents running simultaneously")
     f.add_argument("inputs", nargs="+"); f.add_argument("-o", "--output", required=True)

@@ -51,6 +51,29 @@ The response is `{"messages": [...], "stats": {...}}` with
 `reduction_pct`, `kept`/`dropped` counts, latency and cost. Replace your
 working transcript with the returned messages.
 
+## Cache-aware squeeze (keeps the prompt cache warm)
+
+Provider prompt caches key on exact prefix bytes — rewriting an earlier
+message nukes the cache. POST `/v1/squeeze-cache-aware` instead of
+`/v1/squeeze`: the first `protect_tokens` are returned byte-identical and
+only the tail is squeezed. Cover system prompt + tool definitions + stable
+history with the protected prefix; the next call serves it at cache-read
+price (0.1x on Anthropic).
+
+```bash
+curl -s -X POST "$AGENT_SQUEEZE_URL/v1/squeeze-cache-aware" \
+  -H "Content-Type: application/json" \
+  ${AGENT_SQUEEZE_TOKEN:+-H "Authorization: Bearer $AGENT_SQUEEZE_TOKEN"} \
+  -d @- <<'EOF' > squeezed.json
+{"messages": [...], "task": "Fix the NullPointerException in PaymentProcessor",
+ "protect_tokens": 4096}
+EOF
+```
+
+`stats` carries `protected_tokens` (byte-identical, cache-safe) alongside
+the usual numbers. Same behavior locally:
+`python -m agent_squeeze.cli squeeze t.jsonl -o out.json --protect-prefix 4096`.
+
 ## Squeeze a fleet (multiple agents at once)
 
 POST `/v1/squeeze-fleet` with one entry per agent. The service first

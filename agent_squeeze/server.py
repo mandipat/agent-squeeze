@@ -11,6 +11,11 @@ Endpoints:
     GET  /health
     POST /v1/squeeze       {"messages": [...], "task": "..."} ->
                            {"messages": [...], "stats": {...}}
+    POST /v1/squeeze-cache-aware  {"messages": [...], "task": "...",
+                           "protect_tokens": 1024} ->
+                           {"messages": [...], "stats": {...}}
+                           first N tokens returned byte-identical so the
+                           provider prompt cache keeps hitting.
     POST /v1/squeeze-fleet {"transcripts": {"a": [...], "b": [...]}, "task": "..."} ->
                            {"transcripts": {...}, "report": {...}}
 
@@ -23,6 +28,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from .fleet import squeeze_fleet
 from .messages import from_openai, infer_task
+from .cache import squeeze_cache_aware
 from .squeeze import squeeze_transcript
 
 SERVICE_TOKEN = os.environ.get("AGENT_SQUEEZE_TOKEN")
@@ -76,6 +82,13 @@ class Handler(BaseHTTPRequestHandler):
                 task = data.get("task") or infer_task(messages)
                 out, stats = squeeze_transcript(messages, task, threshold)
                 return self._send(200, {"messages": out, "stats": stats})
+            if self.path == "/v1/squeeze-cache-aware":
+                messages = _as_messages(data.get("messages"))
+                task = data.get("task") or infer_task(messages)
+                protect = int(data.get("protect_tokens", 1024))
+                out, stats = squeeze_cache_aware(messages, task, protect,
+                                                 threshold=threshold)
+                return self._send(200, {"messages": out, "stats": stats})
             if self.path == "/v1/squeeze-fleet":
                 raw = data.get("transcripts") or {}
                 transcripts = {k: _as_messages(v) for k, v in raw.items()}
@@ -103,7 +116,8 @@ def main():
         print("warning: OPENROUTER_API_KEY is not set — squeeze calls will fail")
     server = ThreadingHTTPServer((args.host, args.port), Handler)
     print(f"agent-squeeze serving on http://{args.host}:{args.port}")
-    print("endpoints: GET /health, POST /v1/squeeze, POST /v1/squeeze-fleet")
+    print("endpoints: GET /health, POST /v1/squeeze, "
+          "POST /v1/squeeze-cache-aware, POST /v1/squeeze-fleet")
     server.serve_forever()
 
 

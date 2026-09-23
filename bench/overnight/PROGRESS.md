@@ -75,3 +75,43 @@ full price on every byte, every turn.
 **Blocked:** nothing.
 
 **Awaiting push:** everything since the sprint started (local commits only).
+
+## Run 2 — 2026-09-22 23:45 PDT: wire cache-aware squeeze into CLI + server
+
+**What:** `--protect-prefix N` flag on `cli squeeze` (0 = classic path,
+default) and new `POST /v1/squeeze-cache-aware` endpoint on the service;
+both dispatch to `cache.squeeze_cache_aware`. New wiring test
+`agent_squeeze/test_cache_wiring.py` (3 tests, all pass): prefix stays
+byte-identical through CLI and server paths, classic path untouched.
+README "Use" and plugin `SKILL.md` now document both.
+
+**Why:** Run 1's cache-aware mode was library-only — nobody could call it
+from the CLI or the service that agents actually hit. This makes it usable.
+The server endpoint also matters for the Claude Code compaction-hook recipe
+(candidate run): a PreCompact hook can POST the transcript to
+`/v1/squeeze-cache-aware` and get a cache-safe squeezed transcript back.
+
+**Numbers** (deterministic stub policy, zero paid calls — Jev stubbed at
+`cache.jev.score_chunks`, decision cache and OpenRouter key untouched):
+
+| path | protected tokens | reduction |
+|---|---|---|
+| CLI `--protect-prefix 100` | 11 | 0.09% |
+| CLI default (no flag) | — (classic path) | 0.09% |
+| server `/v1/squeeze-cache-aware` | 11 | 0.09% |
+
+(The toy 8-message transcript is nearly all unique text, so the stub
+policy legitimately drops nothing — the assertion that matters is
+byte-identical prefix + `protected_tokens` present in stats.)
+
+**Next (candidate runs):**
+- Claude Code compaction-hook recipe: PreCompact hook → POST
+  `/v1/squeeze-cache-aware` → replace transcript; docs in `claude-plugin/`.
+- Jev-call benchmark on synthetic_monitoring to verify the deterministic
+  policy tracks real Jev keep/drop (uses cached decisions; key near cap).
+- TypeScript SDK spike; MCP server compression recipe; `--protect-prefix`
+  into `fleet` and the v2 context-aware pruner.
+
+**Blocked:** nothing.
+
+**Awaiting push:** everything since the sprint started (local commits only).
