@@ -115,6 +115,19 @@ on `POST /v1/squeeze`, `/v1/squeeze-cache-aware`, `/v1/squeeze-fleet`
 (`single_tier: true` also accepted there), and the `overlap_chars` /
 `single_tier` args of the `squeeze_transcript` MCP tool.
 
+**Tool-definition pruning (`agent_squeeze/tooldef.py`):** per-task keep/prune
+of the agent's tool list, before the turn starts. Recently-called tools are
+sacred; the rest are judged on task-vocabulary overlap (name + description +
+schema property names, with a small alias table for task verbs like
+"debug"→file/grep/shell); empty or signal-free tasks fail-safe to keep-all
+(a lost tool schema is a hard failure, a fat list is only cost). Pruned
+definitions are held byte-identically and recallable by name
+(`readmit_tool`). 41-tool synthetic bench: 41 → 8 tools, 1547 → 318 tokens
+(−79.4%), needle recall 8/8. See `bench/tooldef/run.py`. Production Jev
+shape: one noul question per tool ("will the agent need {name} for this
+task?"), all asked in a single map-reduce decisions call — inject via
+`policy_fn`.
+
 ## Use
 
 ```bash

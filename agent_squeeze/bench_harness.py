@@ -33,6 +33,7 @@ BENCHES = {
     "chunk_boundary_split": ("bench/chunk_tiers/bench_boundary_split.py", [], False),
     "cache_aware": ("bench/cache_aware/bench_cache.py", [], False),
     "quickstart": ("quickstart/run.py", [], False),
+    "tooldef": ("bench/tooldef/run.py", [], False),
     # Live-Jev prune: real TypeSafe decisions via OpenRouter. Opt-in only.
     "live_jev_prune": (
         "bench/pruners/jev_prune.py",

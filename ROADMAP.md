@@ -29,8 +29,13 @@ This is the living plan. Every item ends in a benchmark number, not a vibe.
 - [ ] **Cross-agent *semantic* dedup (opt-in).** Exact-match is the safe
       default; add an explicit `--allow-near-dup` mode with the Headroom
       failure case as a regression test that must stay green.
-- [ ] **Tool-definition pruning.** Agents carry 50–200 MCP tool definitions
+- [x] **Tool-definition pruning.** Agents carry 50–200 MCP tool definitions
       every turn; Jev-prune the tool *list* per task (cf. jev-tool-permissions).
+      (done: Run 28 — `agent_squeeze/tooldef.py`: recently-called tools are
+      sacred, task-vocabulary + alias matching for the rest, fail-safe keeps
+      everything when there is no task signal; pruned definitions held
+      byte-identical via HoldStore and recallable by name. 41-tool bench:
+      41 → 8 tools, 1547 → 318 tokens (−79.4%), needle recall 8/8.)
 
 ## Phase 4 — Distribution (the viral loop)
 - [ ] **MCP server + TypeScript SDK.** Meet jev-compactor where the users are;
