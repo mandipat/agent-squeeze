@@ -1,0 +1,77 @@
+# agent-squeeze overnight build — PROGRESS.md
+
+Runs every 30 min, Tue 2026-09-22 night → Wed 2026-09-23 08:00 PDT.
+One focused improvement per run, ~20 min. Commits are local-only — **never
+push** (no standing GitHub token; pushes need the user).
+
+## Run 1 — 2026-09-22 23:13 PDT: cache-aware squeeze (prompt-cache interplay)
+
+**What:** new module `agent_squeeze/cache.py` + offline benchmark
+`bench/cache_aware/` + 6 unit tests (`agent_squeeze/test_cache.py`, all pass).
+
+**Why:** provider prompt caches key on exact prefix bytes, so any rewrite of
+an earlier message breaks the whole cache entry — compaction is the #1
+cache-killer in long sessions (floppa2003 prompt-caching-playbook). Pruning
+oldest tool outputs while keeping message structure intact beats summarizing
+the prefix. The existing squeezer was already half-way there (it never
+rewrites user/assistant text); cache-aware mode extends the guarantee to tool
+messages inside a protected prefix.
+
+**API:**
+- `squeeze_cache_aware(msgs, task, protect_tokens=1024)` — prefix returned
+  byte-identical; only the tail is Jev-squeezed. `policy_fn` injectable for
+  offline use (defaults to `jev.score_chunks`).
+- `stable_prefix_tokens(original, squeezed)` — leading byte-identical tokens
+  = what the next call serves from cache.
+- `cache_breakpoints(msgs, protect_tokens)` — suggests up to 2 Anthropic
+  `cache_control` breakpoint indices (prefix end + last message, which slides
+  forward each turn).
+- `inject_cache_control(anthropic_msgs, bps)` — adds `{"type": "ephemeral"}`
+  to the last text block of breakpoint messages; does not mutate input.
+- `next_turn_cost_model` / `session_cost_model` — simulate next-call and
+  10-turn input cost with Anthropic ratios (cache read 0.1x, write 1.25x).
+
+**Numbers** (deterministic boilerplate policy, zero paid calls — no Jev,
+decision cache untouched, OpenRouter key budget preserved):
+
+| input | before | naive −% | aware −% | stable prefix | 10-turn naive $ | 10-turn aware $ |
+|---|---|---|---|---|---|---|
+| synthetic_monitoring (101k tok) | 101052 | 14.21% | 13.97% | 2381 | 2.6082 | 2.5528 |
+| sre_incident | 7942 | −0.01% | −0.01% | 80 | 0.2383 | 0.2364 |
+| mixed_grind | 28703 | 0.0% | 0.0% | 28703 | 0.8611 | 0.1937 |
+| github_triage | 7788 | 0.0% | 0.0% | 57 | 0.2336 | 0.2323 |
+
+The policy legitimately drops nothing on the three real/adversarial inputs
+(all-unique tool outputs), so the synthetic monitoring session (seeded,
+byte-identical, 60 polling rounds with repeated boilerplate + 3 high-signal
+errors) carries the comparison: cache-aware gives up 0.24pp reduction for a
+2,381-token protected prefix; 10-turn session $2.55 vs $2.61 naive. The gap
+compounds with larger prefixes and longer sessions — a rewritten prefix pays
+full price on every byte, every turn.
+
+**Sources** (prompt-cache interplay research):
+- floppa2003/skills prompt-caching-playbook — compaction is the #1
+  cache-killer; pruning-not-summarizing preserves the prefix; breakpoint
+  slides forward each turn (Anthropic up to 4 breakpoints)
+- bm629/agent-skills token-optimization SKILL.md — stable prefix first,
+  breakpoint at end of largest stable block, byte-identical between calls;
+  never edit an earlier message in place
+- papr-ai/paprwork PROMPT_CACHE_AND_COST_OPTIMIZATION.md — system prompt
+  never mutated per turn (cache-safe); file reads stay full in history for
+  cache stability; compression handles overflow
+- Medium/Adnan Masood (Aug 2026) — Anthropic 5-min cache breaks even on 2nd
+  use; 20k-token prefix at 80% reuse cuts stable-prefix cost 55–70%
+
+**Next (candidate runs):**
+- Wire `protect_tokens` into the CLI (`--protect-prefix`) and the v2
+  context-aware pruner.
+- Claude Code compaction-hook recipe: run cache-aware squeeze as a
+  SessionStart/PreCompact hook so compaction stops nuking the cache.
+- Jev-call benchmark on synthetic_monitoring to verify the deterministic
+  policy tracks real Jev keep/drop (uses cached decisions; key near cap).
+- TypeScript SDK spike; MCP server compression recipe; prompt-cache TTL
+  tuning (5-min vs 1-hour breakpoints per the Masood numbers).
+
+**Blocked:** nothing.
+
+**Awaiting push:** everything since the sprint started (local commits only).

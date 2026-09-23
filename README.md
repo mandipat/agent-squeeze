@@ -103,6 +103,31 @@ what "needed" means to the judge, and a vague task drops answer-critical
 chunks. `--needles` is a file with one must-survive string per line; the CLI
 exits non-zero if any is lost — wire it into CI.
 
+## Cache-aware squeeze
+
+Provider prompt caches key on **exact prefix bytes** — any rewrite of an
+earlier message breaks the whole cache entry, so compaction is the #1
+cache-killer in long sessions. `agent_squeeze.cache` keeps the first N tokens
+(system prompt, tool defs, early turns) **byte-identical** and squeezes only
+the dynamic tail, so the next call reads the prefix from cache (0.1x on
+Anthropic) instead of re-encoding it at full price. It also suggests
+`cache_control` breakpoint message indices and can inject them into
+Anthropic-format messages.
+
+```python
+from agent_squeeze import cache
+msgs, stats = cache.squeeze_cache_aware(msgs, task, protect_tokens=4096)
+bps = cache.cache_breakpoints(msgs, 4096)          # [prefix_end, last_msg]
+api_msgs = cache.inject_cache_control(anthropic_msgs, bps)
+```
+
+Offline benchmark (deterministic policy, zero paid calls —
+`bench/cache_aware/REPORT.md`): on a 101k-token synthetic monitoring session
+with repeated boilerplate tool outputs, cache-aware trades 14.21% → 13.97%
+reduction for a 2,381-token byte-identical prefix; over a 10-turn session the
+protected prefix pays one cache write + cheap reads instead of full price on
+every turn ($2.55 vs $2.61 — the gap widens as the prefix grows).
+
 ## Demo
 
 ```bash
