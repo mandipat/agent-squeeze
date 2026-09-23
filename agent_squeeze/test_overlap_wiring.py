@@ -213,10 +213,12 @@ def test_server_accepts_overlap_and_single_tier():
                        threshold, two_tier, overlap_chars)
 
     def fl(transcripts, task=None, threshold=0.5, min_dup_chars=60,
-           protect_tokens=0, policy_fn=None, two_tier=True, overlap_chars=0):
+           protect_tokens=0, policy_fn=None, two_tier=True, overlap_chars=0,
+           **kw):
         seen["fl"] = (two_tier, overlap_chars)
         return real_fl(transcripts, task, threshold, min_dup_chars,
-                       protect_tokens, stub_policy, two_tier, overlap_chars)
+                       protect_tokens, stub_policy, two_tier, overlap_chars,
+                       **kw)
 
     server_mod.squeeze_transcript, server_mod.squeeze_cache_aware = sq, ca
     server_mod.squeeze_fleet = fl

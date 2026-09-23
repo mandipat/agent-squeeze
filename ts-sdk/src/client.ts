@@ -73,13 +73,21 @@ export class AgentSqueezeClient {
     });
   }
 
-  /** Squeeze many transcripts at once (agent fleet). */
+  /** Squeeze many transcripts at once (agent fleet).
+   * options.allowNearDup opts into cross-agent near-duplicate collapse
+   * (Jaccard >= 0.85, diff-preserving); default false = exact-match only. */
   squeezeFleet(
     transcripts: Record<string, Message[]>,
     task?: string,
     threshold = 0.5,
+    options?: { allowNearDup?: boolean },
   ): Promise<FleetResult> {
-    return this.post("/v1/squeeze-fleet", { transcripts, task, threshold });
+    return this.post("/v1/squeeze-fleet", {
+      transcripts,
+      task,
+      threshold,
+      allow_near_dup: options?.allowNearDup ?? false,
+    });
   }
 
   /** Admit-time gate: judge one tool result before it enters context. */

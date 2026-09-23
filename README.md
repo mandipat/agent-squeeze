@@ -148,6 +148,8 @@ python -m agent_squeeze.cli fleet fe.jsonl be.jsonl -o fleet.json \
 # differing lines in the marker, so answer-critical deltas are never lost
 python -m agent_squeeze.cli fleet fe.jsonl be.jsonl -o fleet.json \
   --allow-near-dup
+# HTTP: POST /v1/squeeze-fleet {"transcripts": {...}, "allow_near_dup": true}
+# TS:  client.squeezeFleet(transcripts, task, 0.5, { allowNearDup: true })
 
 # cache-aware: keep the first 4096 tokens byte-identical (prompt-cache safe)
 python -m agent_squeeze.cli squeeze transcript.jsonl --task "..." \

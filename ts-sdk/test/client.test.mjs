@@ -32,6 +32,7 @@ function startStub() {
             },
           });
         case "/v1/squeeze-fleet":
+          SEEN.fleetBody = data;
           return json(200, {
             transcripts: { a: data.transcripts.a },
             report: { n: 1 },
@@ -125,6 +126,16 @@ test("SDK round-trips all endpoints", async (t) => {
 
   const fl = await client.squeezeFleet({ a: [{ role: "user", content: "y" }] });
   assert.equal(fl.report.n, 1);
+  assert.equal(SEEN.fleetBody.allow_near_dup, false);
+
+  const fl2 = await client.squeezeFleet(
+    { a: [{ role: "user", content: "y" }] },
+    undefined,
+    0.5,
+    { allowNearDup: true },
+  );
+  assert.equal(fl2.report.n, 1);
+  assert.equal(SEEN.fleetBody.allow_near_dup, true);
 
   const adm = await client.admit("poll", "heartbeat\n".repeat(800), "monitor");
   assert.equal(adm.decision, "notice");

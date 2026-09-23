@@ -145,7 +145,8 @@ class Handler(BaseHTTPRequestHandler):
                 out, report = squeeze_fleet(
                     transcripts, data.get("task"), threshold,
                     protect_tokens=protect, two_tier=two_tier,
-                    overlap_chars=overlap)
+                    overlap_chars=overlap,
+                    allow_near_dup=bool(data.get("allow_near_dup", False)))
                 return self._send(200, {"transcripts": out, "report": report})
             if self.path == "/v1/admit":
                 store = _hold_store()

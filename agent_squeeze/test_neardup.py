@@ -173,9 +173,59 @@ def test_neardup_cli_flag():
         jev_mod.score_chunks = real_jev
 
 
+def test_neardup_server_flag():
+    """POST /v1/squeeze-fleet honors allow_near_dup; default stays exact-only."""
+    import threading
+    import urllib.request
+    from http.server import ThreadingHTTPServer
+    import agent_squeeze.server as server_mod
+    import agent_squeeze.fleet as fleet_mod
+    import agent_squeeze.jev as jev_mod
+
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), server_mod.Handler)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    real_fleet = server_mod.squeeze_fleet
+    real_jev = jev_mod.score_chunks
+
+    def post(allow):
+        body = json.dumps({"transcripts": TRANSCRIPTS,
+                           "task": "roll out services",
+                           "protect_tokens": 100,  # policy_fn only flows on
+                           "allow_near_dup": allow}).encode()  # the protect path
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{srv.server_port}/v1/squeeze-fleet",
+            data=body, headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req) as r:
+            return json.load(r)
+
+    try:
+        def wrapped(transcripts, task=None, threshold=0.5, min_dup_chars=60,
+                    protect_tokens=0, policy_fn=None, **kw):
+            return fleet_mod.squeeze_fleet(transcripts, task, threshold,
+                                           min_dup_chars, protect_tokens,
+                                           keep_all, **kw)
+        server_mod.squeeze_fleet = wrapped
+        try:
+            default = post(False)
+            assert default["report"]["global_near_duplicates"] == 0, \
+                default["report"]
+            near = post(True)
+            assert near["report"]["global_near_duplicates"] == 2, \
+                near["report"]
+            blob = json.dumps(near["transcripts"]).lower()
+            assert all(n.lower() in blob for n in NEEDLES), \
+                "needles lost through the server path"
+            print("test_neardup_server_flag: PASS")
+        finally:
+            server_mod.squeeze_fleet = real_fleet
+    finally:
+        srv.shutdown()
+
+
 if __name__ == "__main__":
     test_neardup_off_by_default()
     test_neardup_diff_preserving()
     test_neardup_headroom_case_stays_green()
     test_neardup_respects_threshold()
     test_neardup_cli_flag()
+    test_neardup_server_flag()
