@@ -718,3 +718,51 @@ path is actually exercised.
 **Blocked:** nothing.
 
 **Awaiting push:** everything since the sprint started (local commits only).
+
+## Run 15 — 2026-09-23 02:43 PDT: prompt-cache TTL tuning (5-min vs 1-hour)
+
+**What:** new module `agent_squeeze/ttl.py` + deterministic simulator
+`bench/ttl_tuning/run.py` + 7 unit tests (`agent_squeeze/test_ttl.py`, all
+pass; full suite 63/63). Runs 1–10 protected a stable prefix so provider
+prompt caches survive squeezing; this run answers the remaining pricing
+question: Anthropic's 5-min TTL writes at 1.25x and reads at 0.1x, the 1-hour
+TTL writes at 2.0x and reads at 0.1x. `simulate_session` models the prefix as
+one cache entry (each hit refreshes the TTL, a gap beyond it forces a
+rewrite), the dynamic tail always at full price; `recommend_ttl` runs both
+and picks the cheaper one (ties → 5-min, cheaper write).
+
+**Numbers** (pure arithmetic over deterministic gap patterns, zero paid calls
+— no Jev, decision cache and OpenRouter key untouched; $3/MTok Sonnet-class):
+
+| session rhythm | prefix | 5-min | 1-hour | winner | saving |
+|---|---|---|---|---|---|
+| coding_burst (gaps < 90s) | 200k | $1.48 | $1.93 | 5-min | 23.3% |
+| research_slow (gaps 5–25 min) | 200k | $8.38 | $1.93 | 1-hour | 77.0% |
+| mixed (bursts + 45-min pauses) | 200k | $3.55 | $1.93 | 1-hour | 45.6% |
+| overnight_idle (gaps 3–6 h) | 200k | $4.54 | $7.24 | 5-min | 37.3% |
+
+Breakeven sweep (50k prefix, 12 turns, constant gap): gap ≤ 5 min → 5-min
+wins (hit 0.92 both, the 1.25x-vs-2.0x write decides); gap 8+ min → 1-hour
+wins by 4–5x (5-min hit rate collapses to 0.00, every turn rewrites the
+prefix at 1.25x). Non-obvious flip: at multi-hour idle gaps *neither* TTL
+hits, so the cheaper 5-min write wins again — 1-hour is only for the
+5-min-to-~1-hour gap band, where the read savings amortize the pricier write
+and the margin grows with prefix size.
+
+**Rule of thumb (now in README):** default 5-min; switch a long session to
+1-hour TTL when typical inter-turn gap is 5–60 min *and* the protected prefix
+is ≥ ~50k tokens.
+
+**Next (candidate runs):**
+- Wire `recommend_ttl` into the CLI/server (`squeeze-ttl` subcommand or
+  `--ttl-recommend` flag) so agents pick the TTL from their session stats.
+- Live-fire the PostToolUse hook in a real Claude Code session; measure how
+  often the model acts on the excerpt vs the raw result.
+- Jev-call benchmark on synthetic_monitoring / admit corpus to verify the
+  deterministic policies track real Jev keep/drop (batch questions, reuse
+  `~/.agent_squeeze/decisions.sqlite` — key near cap; consider waiting for
+  the cap reset).
+
+**Blocked:** nothing.
+
+**Awaiting push:** everything since the sprint started (local commits only).
