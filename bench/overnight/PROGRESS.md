@@ -76,6 +76,7 @@ full price on every byte, every turn.
 
 **Awaiting push:** everything since the sprint started (local commits only).
 
+
 ## Run 2 — 2026-09-22 23:45 PDT: wire cache-aware squeeze into CLI + server
 
 **What:** `--protect-prefix N` flag on `cli squeeze` (0 = classic path,
@@ -155,3 +156,85 @@ breaks the user's session.
 
 **Awaiting push:** everything since the sprint started (local commits only).
 
+## Run 4 — 2026-09-23 00:05 PDT: admit-time tool-result gate (Jev research fold-in)
+
+**What:** new module `agent_squeeze/admit.py` + offline benchmark
+`bench/admit_time/run.py` + 7 unit tests (`agent_squeeze/test_admit.py`,
+all pass; full suite 19/19).
+
+**Why (research → code):** web research on how people use Jev/TypeSafe
+decision models turned up a decisive asymmetry: pi-jev-context measured that
+*retroactive* pruning of old history is risky — raw Jev dropped 73% of items
+later needed on real sessions (21% even with deterministic source
+protection), so its shadow old-context pruning was never applied — while
+*write-time* trimming (cut long tool output to verbatim key lines before it
+enters context) saved 31–53% tokens on held-out sets with 0 key lines lost
+and only 1/184 real-session replays hiding something used later. Folded in:
+(1) admit-time gate — judge a tool result when its relevance is fresh, not
+weeks-old; (2) LiteLLM's Jev-compaction notice pattern (tool call + ids
+intact, dropped result replaced with a short notice); (3) winnow's admission
+gate (judge before admitting into context); (4) omp-fast-jev-compaction's
+operational honesty — deterministic, attributable decisions.
+
+**API:**
+- `admit_tool_result(name, text, task, store, policy_fn, head_lines=8,
+  tail_lines=8)` — decisions: `keep_full` (short/errors), `trim` (verbatim
+  head+tail lines, middle held), `notice` (LiteLLM-style one-liner for
+  repetitive boilerplate), `hold` (ref-only admission). `policy_fn` injectable
+  for offline use; `jev_admit` (two noul questions batched in one Jev call:
+  relevance + excerpt-sufficiency) for production.
+- `HoldStore` — off-context verbatim storage; `readmit(ref)` is
+  byte-identical; `readmit_if_mentioned(followup)` re-admits any held result
+  the agent later references by ref. Nothing is ever lost.
+- `admit_session(results, task)` — batch gating + stats (chars in/out,
+  reduction %, per-decision counts).
+
+**Numbers** (deterministic offline policy, zero paid calls — no Jev,
+decision cache untouched, OpenRouter key budget preserved):
+
+| result | chars | decision | admitted |
+|---|---|---|---|
+| 60-round poll log (3 needles + 1 OOM error) | ~3.5k | trim | head/tail verbatim |
+| 2000 JSON records | ~143k | trim | head/tail verbatim |
+| 800× identical heartbeat | ~11k | notice | one-liner |
+| `ls` listing | 26 | keep_full | verbatim |
+| deploy traceback | ~3.5k | keep_full | verbatim (error path) |
+
+Total: 153,850 → 5,749 admitted chars (−96.26%), 2 holds (149,347 chars held).
+Needle recall 3/3 (top/bottom needles in admitted verbatim lines, middle
+needle recoverable byte-identically via hold ref); all 3 error lines kept
+verbatim; hold roundtrips 2/2 byte-identical. The headline number is inflated
+by synthetic boilerplate, as it should be — the real claim is the mechanism:
+relevance judged fresh at write time with lossless recall.
+
+**Sources** (Jev/decision-model usage research):
+- robokrunch/awesome-jev — pi-jev-context: write-time verbatim trim 31–53%
+  saved, 0 key lines lost; shadow old-context pruning 73% drop of
+  later-needed items → never applied
+- docs.litellm.ai/blog/typesafe-jev-compaction — LiteLLM Jev compaction:
+  tool calls + IDs kept, results below 0.2 replaced with notice, last
+  assistant message + tool exchange protected
+- edwardyen724-g/jev-compactor — "Jev judges relevance. Code decides
+  structure." nothing kept is ever rewritten; ~300ms per pass
+- Reamd7/omp-fast-jev-compaction — keepThreshold 0.5, preserveRecentMessages,
+  compactAtPercent 60, minReductionRatio, cooldownTokens (ops knobs)
+- cobanov/awesome-jev — winnow (admission gate), yoshi (prune while
+  preserving tool-call protocol), fast-jev-compaction (verbatim select)
+- zentor.ai/blog/what-is-typesafe-jev — Jev request shape: state + typed
+  questions, parallel in isolation, "no context-rot"; choice/score/noul
+- jaredpalmer/kev — Apache-2.0 local Jev-like family (Kev-9B 0.812/0.837
+  acc vs Jev 0.857) if we ever want a free on-device fallback
+
+**Next (candidate runs):**
+- Jev-call benchmark on synthetic_monitoring / admit corpus to verify the
+  deterministic policy tracks real Jev keep/drop (uses cached decisions;
+  key near cap — batch questions, reuse `~/.agent_squeeze/decisions.sqlite`).
+- TypeScript SDK spike; MCP server compression recipe; `--protect-prefix`
+  into `fleet` and the v2 pruner.
+- Wire admit gate into the server (`/v1/admit`) and the toolgate path so
+  agents can gate tool results live.
+- Claude Code hook variant: admit-time gate inside a PostToolUse hook.
+
+**Blocked:** nothing.
+
+**Awaiting push:** everything since the sprint started (local commits only).
